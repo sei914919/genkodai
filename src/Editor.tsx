@@ -1,0 +1,193 @@
+import { useEffect, useRef } from "react";
+import { Annotation, EditorState } from "@codemirror/state";
+import { EditorView, keymap } from "@codemirror/view";
+import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
+import { watch } from "@tauri-apps/plugin-fs";
+import { atomicSave, contentHash, diskHash, loadFile, readFileRaw } from "./fileio";
+import { useAppStore } from "./store";
+import { C, FONT_MS } from "./theme";
+
+// プログラム起因のバッファ置換（読込・外部変更の再読込）を編集と区別するための注釈。
+// これが付いたトランザクションでは dirty 化・自動保存予約をしない。
+const ProgrammaticLoad = Annotation.define<boolean>();
+
+const AUTOSAVE_IDLE_MS = 2000;
+
+const paperTheme = EditorView.theme({
+  "&": { fontSize: "15px", backgroundColor: "transparent" },
+  ".cm-scroller": {
+    fontFamily: FONT_MS,
+    lineHeight: "2.05",
+    overflow: "visible",
+  },
+  ".cm-content": { padding: "0", caretColor: C.ink },
+  ".cm-line": { padding: "0" },
+  "&.cm-focused": { outline: "none" },
+  ".cm-cursor, .cm-dropCursor": { borderLeftColor: C.ink },
+});
+
+export function Editor() {
+  const projectDir = useAppStore((s) => s.projectDir);
+  const currentPath = useAppStore((s) => s.currentPath);
+  const setSaveStatus = useAppStore((s) => s.setSaveStatus);
+  const setNotice = useAppStore((s) => s.setNotice);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<EditorView | null>(null);
+  const loadedPathRef = useRef<string | null>(null);
+  const dirtyRef = useRef(false);
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savingRef = useRef(false);
+
+  const saveNow = async (): Promise<void> => {
+    const view = viewRef.current;
+    const path = loadedPathRef.current;
+    if (!view || !path || !dirtyRef.current || savingRef.current) return;
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    savingRef.current = true;
+    setSaveStatus("saving");
+    const text = view.state.doc.toString();
+    try {
+      await atomicSave(path, text);
+      if (view.state.doc.toString() === text) {
+        dirtyRef.current = false;
+        setSaveStatus("clean");
+      } else {
+        // 保存中にさらに入力があった。dirty のまま次の自動保存に任せる。
+        setSaveStatus("dirty");
+        scheduleAutosave();
+      }
+    } catch (e) {
+      setSaveStatus("dirty");
+      setNotice(`保存に失敗しました: ${e}`);
+    } finally {
+      savingRef.current = false;
+    }
+  };
+
+  const scheduleAutosave = () => {
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(() => void saveNow(), AUTOSAVE_IDLE_MS);
+  };
+
+  const replaceBuffer = (text: string, keepCursor: boolean) => {
+    const view = viewRef.current;
+    if (!view) return;
+    const pos = keepCursor
+      ? Math.min(view.state.selection.main.head, text.length)
+      : 0;
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: text },
+      selection: { anchor: pos },
+      annotations: ProgrammaticLoad.of(true),
+    });
+  };
+
+  // EditorView は一度だけ生成する（IMEはCodeMirror本体に任せ、独自のキー介入をしない）
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: "",
+        extensions: [
+          history(),
+          keymap.of([
+            {
+              key: "Mod-s",
+              preventDefault: true,
+              run: () => {
+                void saveNow();
+                return true;
+              },
+            },
+            ...defaultKeymap,
+            ...historyKeymap,
+          ]),
+          markdown({ base: markdownLanguage }),
+          EditorView.lineWrapping,
+          paperTheme,
+          EditorView.updateListener.of((u) => {
+            if (!u.docChanged) return;
+            if (u.transactions.some((tr) => tr.annotation(ProgrammaticLoad))) return;
+            dirtyRef.current = true;
+            setSaveStatus("dirty");
+            scheduleAutosave();
+          }),
+        ],
+      }),
+      parent: containerRef.current,
+    });
+    viewRef.current = view;
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+      view.destroy();
+      viewRef.current = null;
+      loadedPathRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ファイル切替：バッファ破棄前に未保存変更を確認し、あれば保存してから読み込む（絶対規則2）
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!currentPath || !viewRef.current) return;
+      if (currentPath === loadedPathRef.current) return;
+      if (dirtyRef.current && loadedPathRef.current) await saveNow();
+      const text = await loadFile(currentPath);
+      if (cancelled) return;
+      loadedPathRef.current = currentPath;
+      dirtyRef.current = false;
+      replaceBuffer(text, false);
+      setSaveStatus("clean");
+      viewRef.current?.focus();
+    })().catch((e) => setNotice(`読み込みに失敗しました: ${e}`));
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPath]);
+
+  // ファイル監視（§5.7）：内容ハッシュ比較で自己保存イベントを無視する。
+  // 外部変更は未編集時のみ黙って再読込（FR6簡易版）。
+  useEffect(() => {
+    if (!projectDir) return;
+    let disposed = false;
+    let unwatch: (() => void) | null = null;
+
+    const onEvent = async (event: { paths: string[] }) => {
+      const path = loadedPathRef.current;
+      if (!path || !event.paths.includes(path)) return;
+      let text: string;
+      try {
+        text = await readFileRaw(path);
+      } catch {
+        return; // rename途中・一時的に読めない場合は次のイベントに任せる
+      }
+      const h = contentHash(text);
+      if (h === diskHash.get(path)) return; // 自己保存（または変化なし）→ 無視
+      if (dirtyRef.current) {
+        setNotice("外部変更を検知しましたが、未保存の編集があるため再読込しません");
+        return;
+      }
+      diskHash.set(path, h);
+      replaceBuffer(text, true);
+      setNotice("外部変更を検知し、再読み込みしました");
+    };
+
+    watch(projectDir, (e) => void onEvent(e as { paths: string[] }), {
+      delayMs: 300,
+    }).then((fn) => {
+      if (disposed) fn();
+      else unwatch = fn;
+    });
+    return () => {
+      disposed = true;
+      unwatch?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectDir]);
+
+  return <div ref={containerRef} />;
+}

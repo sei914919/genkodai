@@ -1,0 +1,26 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-ui);
+  color: var(--c-ink);
+  background: var(--c-chrome);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--c-aiBg);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--c-ai);
+  outline-offset: 2px;
+}
