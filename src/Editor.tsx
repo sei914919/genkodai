@@ -44,6 +44,11 @@ export function Editor() {
     const view = viewRef.current;
     const path = loadedPathRef.current;
     if (!view || !path || !dirtyRef.current || savingRef.current) return;
+    if (view.composing) {
+      // IME変換中の保存はライブ変換の確定を誘発しうるため、変換終了後に延期する
+      scheduleAutosave();
+      return;
+    }
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     savingRef.current = true;
     setSaveStatus("saving");
@@ -158,7 +163,9 @@ export function Editor() {
 
     const onEvent = async (event: { paths: string[] }) => {
       const path = loadedPathRef.current;
-      if (!path || !event.paths.includes(path)) return;
+      // FSEventsはfirmlink経由の別表記（/System/Volumes/Data前置き等）を返すことがあるため
+      // 完全一致に加えて後方一致でも照合する
+      if (!path || !event.paths.some((p) => p === path || p.endsWith(path))) return;
       let text: string;
       try {
         text = await readFileRaw(path);
@@ -178,10 +185,14 @@ export function Editor() {
 
     watch(projectDir, (e) => void onEvent(e as { paths: string[] }), {
       delayMs: 300,
-    }).then((fn) => {
-      if (disposed) fn();
-      else unwatch = fn;
-    });
+    })
+      .then((fn) => {
+        if (disposed) fn();
+        else unwatch = fn;
+      })
+      .catch((e) => {
+        setNotice(`ファイル監視を開始できませんでした: ${e}`);
+      });
     return () => {
       disposed = true;
       unwatch?.();
