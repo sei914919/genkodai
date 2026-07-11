@@ -38,3 +38,36 @@ export async function runScript(script: string, cwd?: string): Promise<RunResult
     stderr: out.stderr.trim(),
   };
 }
+
+// キャンセル可能な実行（FR16）。`exec` でシェルを実プロセスに置き換えるため、
+// kill() が確実に対象バイナリへ届く。
+export interface Spawned {
+  kill: () => Promise<void>;
+  result: Promise<RunResult>;
+  pid: number;
+}
+
+export async function spawnProgram(
+  programFullPath: string,
+  args: string[],
+  cwd?: string,
+): Promise<Spawned> {
+  const script = "exec " + [programFullPath, ...args].map(shq).join(" ");
+  const cmd = Command.create("zsh", ["-lc", script], cwd ? { cwd } : undefined);
+  let stdout = "";
+  let stderr = "";
+  cmd.stdout.on("data", (d: string) => {
+    stdout += d;
+  });
+  cmd.stderr.on("data", (d: string) => {
+    stderr += d;
+  });
+  const result = new Promise<RunResult>((resolve, reject) => {
+    cmd.on("close", (data: { code: number | null }) =>
+      resolve({ code: data.code, stdout: stdout.trim(), stderr: stderr.trim() }),
+    );
+    cmd.on("error", (e: string) => reject(new Error(e)));
+  });
+  const child = await cmd.spawn();
+  return { kill: () => child.kill(), result, pid: child.pid };
+}

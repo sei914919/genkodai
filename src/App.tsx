@@ -12,6 +12,7 @@ import { fireAndReport } from "./async";
 import { loadSettings, missingHint, resolveBins } from "./binPaths";
 import { gitCommitAll, gitState } from "./git";
 import { integrityReport, renderQuarto } from "./workflow";
+import { snapshotProject } from "./snapshot";
 import { useAppStore } from "./store";
 import styles from "./App.module.css";
 
@@ -90,9 +91,12 @@ export default function App() {
     const dir = await open({ directory: true, title: "プロジェクトフォルダを開く" });
     if (typeof dir !== "string") return;
     try {
-      openProject(dir, await listQmdFiles(dir));
+      const files = await listQmdFiles(dir);
+      openProject(dir, files);
       const res = await loadResources(dir);
       setNotesData(res.notes, res.refs, res.bibErrors, res.orphanKeys);
+      // NFR3: 開いた時点の原稿を app config 領域へスナップショット（直近5世代）
+      fireAndReport(snapshotProject(dir, files), "リカバリスナップショット");
     } catch (e) {
       setNotice(`フォルダを開けませんでした: ${e}`);
     }
@@ -145,6 +149,19 @@ export default function App() {
     } catch (e) {
       setNotice(`出力を開けませんでした: ${e}`);
     }
+  };
+
+  // FR21: レンダー成功時の任意コミット
+  const commitAfterRender = async () => {
+    const s = useAppStore.getState();
+    if (!s.projectDir || !s.bins.git || !s.git.isRepo || !s.currentPath) return;
+    const r = await gitCommitAll(
+      s.bins.git,
+      s.projectDir,
+      `render: ${baseName(s.currentPath)}`,
+    );
+    setNotice(r.committed ? `コミットしました: ${r.detail}` : r.detail);
+    await refreshGit();
   };
 
   // FR20 手動コミット
@@ -283,6 +300,7 @@ export default function App() {
             <ReportPanel
               onOpenOutput={(p) => fireAndReport(openOutput(p), "出力を開く")}
               onIgnoreLint={() => fireAndReport(runRender(true), "レンダー")}
+              onCommitRender={() => fireAndReport(commitAfterRender(), "コミット")}
               onCloseRender={() => setRender({ ok: null, log: "", outputPath: null })}
               onCloseIntegrity={() => setIntegrityReport(null)}
               onOpenRefs={() => setRightTab("refs")}
@@ -305,17 +323,20 @@ function ReportPanel({
   onCloseRender,
   onCloseIntegrity,
   onOpenRefs,
+  onCommitRender,
 }: {
   onOpenOutput: (path: string) => void;
   onIgnoreLint: () => void;
   onCloseRender: () => void;
   onCloseIntegrity: () => void;
   onOpenRefs: () => void;
+  onCommitRender: () => void;
 }) {
   const render = useAppStore((s) => s.render);
   const report = useAppStore((s) => s.integrityReport);
   const orphanCount = useAppStore((s) => s.orphanKeys.length);
   const markerCount = useAppStore((s) => s.derived.markers.length);
+  const git = useAppStore((s) => s.git);
 
   const showRender = render.log !== "";
   if (!showRender && report === null) return null;
@@ -359,6 +380,11 @@ function ReportPanel({
                 onClick={() => onOpenOutput(render.outputPath!)}
               >
                 出力を開く
+              </button>
+            )}
+            {render.ok === true && git.isRepo && git.dirty && (
+              <button className={styles.reportAction} onClick={onCommitRender}>
+                この状態をコミット（FR21）
               </button>
             )}
             {render.ok === false && markerCount > 0 && !render.running && (

@@ -23,6 +23,21 @@ export async function loadResources(dir: string): Promise<ProjectResources> {
   return { notes, refs, bibErrors, orphanKeys };
 }
 
+// quote検証（§5.5）用に notes/ の生テキストを相対パスキーで返す。
+// 穴埋め実行の直前に毎回読み直す（外部編集を取りこぼさないため）。
+export async function loadNoteContents(dir: string): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  const notesDir = `${dir}/notes`;
+  if (!(await exists(notesDir))) return map;
+  const entries = await readDir(notesDir);
+  for (const e of entries) {
+    if (e.isFile && e.name.endsWith(".md")) {
+      map.set(`notes/${e.name}`, await readTextFile(`${notesDir}/${e.name}`));
+    }
+  }
+  return map;
+}
+
 async function loadNotes(dir: string): Promise<ParsedNoteFile[]> {
   const notesDir = `${dir}/notes`;
   if (!(await exists(notesDir))) return [];

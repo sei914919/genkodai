@@ -3,6 +3,7 @@ import { useAppStore } from "./store";
 import { jumpTo } from "./editorActions";
 import { rankByTopic } from "./matching";
 import { fillMarker } from "./workflow";
+import { FillPanel } from "./FillPanel";
 import type { NoteEntry, NoteTopic, ParsedNoteFile } from "./parsers/notes";
 import type { BibEntry } from "./parsers/bibtex";
 import styles from "./RightPanel.module.css";
@@ -65,12 +66,15 @@ export function RightPanel() {
 
       <div className={styles.body}>
         {rightTab === "notes" && (
-          <NotesTab
-            notes={notes}
-            matchTopic={selectedMarker ? selectedMarker.topic : null}
-            onClearMatch={() => selectMarker(null)}
-            onFill={onFill}
-          />
+          <>
+            {selectedMarker === null && <FillPanel />}
+            <NotesTab
+              notes={notes}
+              matchTopic={selectedMarker ? selectedMarker.topic : null}
+              onClearMatch={() => selectMarker(null)}
+              onFill={onFill}
+            />
+          </>
         )}
         {rightTab === "refs" && <RefsTab refs={refs} orphanKeys={orphanKeys} />}
         {rightTab === "fn" && (

@@ -4,6 +4,7 @@ import type { Derived } from "./parsers/derive";
 import type { BibEntry } from "./parsers/bibtex";
 import type { ParsedNoteFile } from "./parsers/notes";
 import type { BinPaths, Settings } from "./binPaths";
+import type { FillProposal } from "./proposalValidate";
 import { NOT_A_REPO, type GitState } from "./git";
 
 export type SaveStatus = "clean" | "dirty" | "saving";
@@ -16,6 +17,27 @@ export interface RenderState {
   log: string;
   outputPath: string | null;
 }
+
+// Claude一括穴埋め（FR16）の進行状態。ログはパネル内表示のみ（監査用・ファイルには書かない）
+export type FillPhase = "idle" | "precommit" | "running" | "review" | "applying";
+
+export interface FillState {
+  phase: FillPhase;
+  proposals: FillProposal[];
+  warnings: string[];
+  prompt: string;
+  rawResponse: string;
+  message: string | null; // タイムアウト・キャンセル・エラー等の表示
+}
+
+export const FILL_IDLE: FillState = {
+  phase: "idle",
+  proposals: [],
+  warnings: [],
+  prompt: "",
+  rawResponse: "",
+  message: null,
+};
 
 const EMPTY_DERIVED: Derived = {
   headings: [],
@@ -53,6 +75,7 @@ interface AppState {
   git: GitState;
   render: RenderState;
   integrityReport: string | null;
+  fill: FillState;
 
   openProject: (dir: string, files: string[]) => void;
   setCurrentPath: (path: string | null) => void;
@@ -74,6 +97,8 @@ interface AppState {
   setGit: (g: GitState) => void;
   setRender: (r: Partial<RenderState>) => void;
   setIntegrityReport: (r: string | null) => void;
+  setFill: (f: Partial<FillState>) => void;
+  resetFill: () => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -101,6 +126,7 @@ export const useAppStore = create<AppState>((set) => ({
   git: NOT_A_REPO,
   render: { running: false, ok: null, log: "", outputPath: null },
   integrityReport: null,
+  fill: FILL_IDLE,
 
   openProject: (dir, files) =>
     set({
@@ -118,6 +144,7 @@ export const useAppStore = create<AppState>((set) => ({
       git: NOT_A_REPO,
       render: { running: false, ok: null, log: "", outputPath: null },
       integrityReport: null,
+      fill: FILL_IDLE,
     }),
   setCurrentPath: (path) => set({ currentPath: path, selectedMarkerIdx: null }),
   setSaveStatus: (s) => set({ saveStatus: s }),
@@ -134,4 +161,6 @@ export const useAppStore = create<AppState>((set) => ({
   setGit: (git) => set({ git }),
   setRender: (r) => set((s) => ({ render: { ...s.render, ...r } })),
   setIntegrityReport: (integrityReport) => set({ integrityReport }),
+  setFill: (f) => set((s) => ({ fill: { ...s.fill, ...f } })),
+  resetFill: () => set({ fill: FILL_IDLE }),
 }));
