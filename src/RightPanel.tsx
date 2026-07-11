@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { useAppStore } from "./store";
 import { jumpTo } from "./editorActions";
+import { rankByTopic } from "./matching";
+import { fillMarker } from "./workflow";
 import type { NoteEntry, NoteTopic, ParsedNoteFile } from "./parsers/notes";
 import type { BibEntry } from "./parsers/bibtex";
 import styles from "./RightPanel.module.css";
@@ -22,6 +24,22 @@ export function RightPanel() {
   const setRightTab = useAppStore((s) => s.setRightTab);
   const selectedMarkerIdx = useAppStore((s) => s.selectedMarkerIdx);
   const selectMarker = useAppStore((s) => s.selectMarker);
+  const setNotice = useAppStore((s) => s.setNotice);
+
+  const selectedMarker =
+    selectedMarkerIdx !== null ? markers[selectedMarkerIdx] ?? null : null;
+
+  // FR14: 選んだ出典でマーカーを脚注に置換する。単一トランザクションなので Cmd+Z で戻せる。
+  const onFill =
+    selectedMarker && view
+      ? (entry: NoteEntry) => {
+          fillMarker(view, selectedMarker, entry);
+          selectMarker(null);
+          setNotice(
+            "脚注を挿入しました — 逐語引用と頁の最終照合は人間の責任です（v2-NFR4）。Cmd+Zで取り消せます",
+          );
+        }
+      : null;
 
   return (
     <div className={styles.panel}>
@@ -49,12 +67,9 @@ export function RightPanel() {
         {rightTab === "notes" && (
           <NotesTab
             notes={notes}
-            matchTopic={
-              selectedMarkerIdx !== null
-                ? markers[selectedMarkerIdx]?.topic ?? null
-                : null
-            }
+            matchTopic={selectedMarker ? selectedMarker.topic : null}
             onClearMatch={() => selectMarker(null)}
+            onFill={onFill}
           />
         )}
         {rightTab === "refs" && <RefsTab refs={refs} orphanKeys={orphanKeys} />}
@@ -106,10 +121,12 @@ function NotesTab({
   notes,
   matchTopic,
   onClearMatch,
+  onFill,
 }: {
   notes: ParsedNoteFile[];
   matchTopic: string | null;
   onClearMatch: () => void;
+  onFill: ((entry: NoteEntry) => void) | null;
 }) {
   const [query, setQuery] = useState("");
 
@@ -120,17 +137,13 @@ function NotesTab({
         all.push({ file: f.file, topic, exact: false });
       }
     }
-    if (matchTopic) {
-      // 照合モード：完全一致を先頭に、ゆるい部分一致も一致度順で（FR14相当の表示のみ）
-      return all
-        .filter(
-          (h) =>
-            h.topic.heading === matchTopic ||
-            h.topic.heading.includes(matchTopic) ||
-            matchTopic.includes(h.topic.heading),
-        )
-        .map((h) => ({ ...h, exact: h.topic.heading === matchTopic }))
-        .sort((a, b) => Number(b.exact) - Number(a.exact));
+    if (matchTopic !== null) {
+      // FR14 照合モード：完全一致＋ゆるい部分一致を一致度順に。
+      // 閾値未満は候補にしない（＝候補を生成・推測しない。FR15/v2-NFR2）
+      return rankByTopic(matchTopic, all, (h) => h.topic.heading).map((s) => ({
+        ...s.item,
+        exact: s.exact,
+      }));
     }
     const q = query.trim();
     if (!q) return all;
@@ -168,6 +181,11 @@ function NotesTab({
           <div className={styles.noMatchTitle}>該当なし</div>
           「{matchTopic || "（未記入）"}」に一致するエントリは notes/
           にありません。出典を勝手には補いません（v2-NFR2）。原典を読んでメモを追加してから再照合してください。
+          <div className={styles.noMatchActions}>
+            <button className={styles.noMatchBtn} onClick={onClearMatch}>
+              マーカーを保留のまま残す
+            </button>
+          </div>
         </div>
       )}
 
@@ -179,7 +197,7 @@ function NotesTab({
             <span className={styles.fileTag}>{h.file}</span>
           </div>
           {h.topic.entries.map((e, i) => (
-            <EntryCard key={i} entry={e} />
+            <EntryCard key={i} entry={e} onFill={onFill} />
           ))}
         </div>
       ))}
@@ -187,7 +205,13 @@ function NotesTab({
   );
 }
 
-function EntryCard({ entry }: { entry: NoteEntry }) {
+function EntryCard({
+  entry,
+  onFill,
+}: {
+  entry: NoteEntry;
+  onFill: ((entry: NoteEntry) => void) | null;
+}) {
   if (!entry.parsed && entry.source === "") {
     // テンプレート外の行はフォールバックで原文表示（FR11・データを落とさない）
     return <div className={styles.rawCard}>{entry.raw}</div>;
@@ -204,6 +228,15 @@ function EntryCard({ entry }: { entry: NoteEntry }) {
       </div>
       {entry.quote && <div className={styles.entryQuote}>{entry.quote}</div>}
       {entry.memo && <div className={styles.entryMemo}>メモ: {entry.memo}</div>}
+      {onFill && (
+        <button
+          className={styles.fillBtn}
+          onClick={() => onFill(entry)}
+          title="出典の人間可読部分のみを脚注に転記します（[key:] タグは転記しません）"
+        >
+          この出典で脚注を埋める
+        </button>
+      )}
     </div>
   );
 }

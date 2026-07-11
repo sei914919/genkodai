@@ -1,11 +1,16 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
+import { openPath } from "@tauri-apps/plugin-opener";
 import { Editor } from "./Editor";
 import { LeftRail } from "./LeftRail";
 import { RightPanel } from "./RightPanel";
+import { SettingsDialog } from "./SettingsDialog";
 import { baseName, listQmdFiles } from "./fileio";
 import { loadResources } from "./loadProject";
 import { insertRequireCitation } from "./editorActions";
+import { loadSettings, missingHint, resolveBins } from "./binPaths";
+import { gitCommitAll, gitState } from "./git";
+import { integrityReport, renderQuarto } from "./workflow";
 import { useAppStore } from "./store";
 import styles from "./App.module.css";
 
@@ -24,19 +29,38 @@ export default function App() {
   const charCount = useAppStore((s) => s.derived.charCount);
   const markerCount = useAppStore((s) => s.derived.markers.length);
   const view = useAppStore((s) => s.view);
+  const bins = useAppStore((s) => s.bins);
+  const git = useAppStore((s) => s.git);
+  const render = useAppStore((s) => s.render);
   const openProject = useAppStore((s) => s.openProject);
   const setCurrentPath = useAppStore((s) => s.setCurrentPath);
   const setNotice = useAppStore((s) => s.setNotice);
   const setNotesData = useAppStore((s) => s.setNotesData);
+  const setBins = useAppStore((s) => s.setBins);
+  const setSettingsOpen = useAppStore((s) => s.setSettingsOpen);
+  const setGit = useAppStore((s) => s.setGit);
+  const setRender = useAppStore((s) => s.setRender);
+  const setIntegrityReport = useAppStore((s) => s.setIntegrityReport);
+  const setRightTab = useAppStore((s) => s.setRightTab);
+
+  const [committing, setCommitting] = useState(false);
 
   useEffect(() => {
     if (!notice) return;
-    const t = setTimeout(() => setNotice(null), 4200);
+    const t = setTimeout(() => setNotice(null), 5200);
     return () => clearTimeout(t);
   }, [notice, setNotice]);
 
-  // FR8: Cmd+Shift+F で要出典マーカー挿入。CodeMirror の keymap には触れず
-  // window レベルで捕捉して共有 view に作用させる（IME安定性への配慮）。
+  // §5.8-1: 起動時に一度だけ外部バイナリのフルパスを解決する
+  useEffect(() => {
+    (async () => {
+      const settings = await loadSettings();
+      setBins(await resolveBins(settings), settings);
+    })().catch((e) => setNotice(`パス解決に失敗しました: ${e}`));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // FR8: Cmd+Shift+F で要出典マーカー挿入（CodeMirror の keymap には触れない）
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.code === "KeyF") {
@@ -47,6 +71,20 @@ export default function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [view]);
+
+  // FR20: git 状態の更新（保存状態が変わるたびに取り直す）
+  const refreshGit = useCallback(async () => {
+    if (!projectDir || !bins.git) return;
+    try {
+      setGit(await gitState(bins.git, projectDir));
+    } catch {
+      /* git が使えない状況は表示側で「未解決」として扱う */
+    }
+  }, [projectDir, bins.git, setGit]);
+
+  useEffect(() => {
+    void refreshGit();
+  }, [refreshGit, saveStatus]);
 
   const chooseFolder = async () => {
     const dir = await open({ directory: true, title: "プロジェクトフォルダを開く" });
@@ -60,7 +98,72 @@ export default function App() {
     }
   };
 
+  // FR19 整合チェック
+  const runIntegrity = () => {
+    const s = useAppStore.getState();
+    setIntegrityReport(
+      integrityReport({
+        orphanKeys: s.orphanKeys,
+        markerCount: s.derived.markers.length,
+        unsaved: s.saveStatus !== "clean",
+        bibErrors: s.bibErrors,
+        noteFileCount: s.notes.length,
+        refCount: s.refs.length,
+      }),
+    );
+  };
+
+  // FR18 レンダー：実行前リント（要出典が残っていれば中止）＋明示的な逃げ道
+  const runRender = async (ignoreLint: boolean) => {
+    const s = useAppStore.getState();
+    if (!s.projectDir || !s.currentPath || !s.bins.quarto) return;
+    if (!ignoreLint && s.derived.markers.length > 0) {
+      setRender({
+        running: false,
+        ok: false,
+        outputPath: null,
+        log: `レンダーを中止しました：要出典が ${s.derived.markers.length} 件残っています（執筆環境v2 FR6）。\nドラフト出力が目的なら「警告を無視してレンダー」を押してください。`,
+      });
+      setNotice(`要出典が ${s.derived.markers.length} 件残っています`);
+      return;
+    }
+    setRender({ running: true, ok: null, log: "quarto render を実行中…", outputPath: null });
+    try {
+      const out = await renderQuarto(s.bins.quarto, s.projectDir, s.currentPath);
+      setRender({ running: false, ok: out.ok, log: out.log, outputPath: out.outputPath });
+      setNotice(out.ok ? "レンダーに成功しました" : "レンダーに失敗しました");
+    } catch (e) {
+      setRender({ running: false, ok: false, log: String(e), outputPath: null });
+    }
+  };
+
+  // FR20 手動コミット
+  const commit = async () => {
+    const s = useAppStore.getState();
+    if (!s.projectDir || !s.bins.git || !s.git.isRepo) return;
+    const message = window.prompt(
+      "コミットメッセージ",
+      `manual: ${new Date().toISOString().slice(0, 16).replace("T", " ")}`,
+    );
+    if (!message) return;
+    setCommitting(true);
+    try {
+      const r = await gitCommitAll(s.bins.git, s.projectDir, message);
+      setNotice(r.committed ? `コミットしました: ${r.detail}` : r.detail);
+      await refreshGit();
+    } catch (e) {
+      setNotice(`コミットに失敗しました: ${e}`);
+    } finally {
+      setCommitting(false);
+    }
+  };
+
   const hasDoc = projectDir && qmdFiles.length > 0;
+  const gitLabel = !bins.git
+    ? "git 未解決"
+    : !git.isRepo
+      ? "gitリポジトリではありません"
+      : `${git.branch} · ${git.dirty ? `${git.changedFiles}件の変更` : "clean"}`;
 
   return (
     <div className={styles.app}>
@@ -83,18 +186,56 @@ export default function App() {
             {STATUS_LABEL[saveStatus]}
           </span>
         )}
+        {projectDir && (
+          <span
+            className={styles.gitState}
+            data-state={!bins.git ? "unresolved" : !git.isRepo ? "norepo" : git.dirty ? "dirty" : "clean"}
+            title={
+              !bins.git
+                ? missingHint("git")
+                : !git.isRepo
+                  ? "このフォルダは git リポジトリではありません（ターミナルで git init すると版管理できます）"
+                  : "ブランチと作業ツリーの状態"
+            }
+          >
+            <span className={styles.gitDot} />
+            {gitLabel}
+          </span>
+        )}
+        {projectDir && git.isRepo && bins.git && (
+          <button className={styles.openBtn} onClick={commit} disabled={committing || !git.dirty}>
+            {committing ? "コミット中…" : "コミット"}
+          </button>
+        )}
+
         <div className={styles.spacer} />
+
         {hasDoc && (
           <>
             <span className={styles.count}>{charCount.toLocaleString()} 字</span>
-            <span
-              className={styles.markerBadge}
-              data-open={markerCount > 0}
-            >
+            <span className={styles.markerBadge} data-open={markerCount > 0}>
               要出典 {markerCount}
             </span>
+            <button className={styles.openBtn} onClick={runIntegrity}>
+              整合チェック
+            </button>
+            <button
+              className={styles.renderBtn}
+              onClick={() => void runRender(false)}
+              disabled={!bins.quarto || render.running}
+              title={bins.quarto ? "quarto render を実行" : missingHint("quarto")}
+            >
+              {render.running ? "レンダー中…" : "レンダー"}
+            </button>
           </>
         )}
+        <button
+          className={styles.openBtn}
+          onClick={() => setSettingsOpen(true)}
+          title="外部コマンドのパス設定"
+        >
+          設定
+        </button>
         <button className={styles.openBtn} onClick={chooseFolder}>
           フォルダを開く
         </button>
@@ -129,12 +270,95 @@ export default function App() {
             <div className={styles.page}>
               <Editor />
             </div>
+            <ReportPanel
+              onOpenOutput={(p) => void openPath(p)}
+              onIgnoreLint={() => void runRender(true)}
+              onCloseRender={() => setRender({ ok: null, log: "", outputPath: null })}
+              onCloseIntegrity={() => setIntegrityReport(null)}
+              onOpenRefs={() => setRightTab("refs")}
+            />
           </div>
           <RightPanel />
         </div>
       )}
 
+      <SettingsDialog />
       {notice && <div className={styles.toast}>{notice}</div>}
+    </div>
+  );
+}
+
+// レンダー結果・整合チェック結果の表示（監査用。ファイルには書かない）
+function ReportPanel({
+  onOpenOutput,
+  onIgnoreLint,
+  onCloseRender,
+  onCloseIntegrity,
+  onOpenRefs,
+}: {
+  onOpenOutput: (path: string) => void;
+  onIgnoreLint: () => void;
+  onCloseRender: () => void;
+  onCloseIntegrity: () => void;
+  onOpenRefs: () => void;
+}) {
+  const render = useAppStore((s) => s.render);
+  const report = useAppStore((s) => s.integrityReport);
+  const orphanCount = useAppStore((s) => s.orphanKeys.length);
+  const markerCount = useAppStore((s) => s.derived.markers.length);
+
+  const showRender = render.log !== "";
+  if (!showRender && report === null) return null;
+
+  return (
+    <div className={styles.reports}>
+      {report !== null && (
+        <div className={styles.report}>
+          <div className={styles.reportHead}>
+            <span className={styles.reportTitle}>整合チェック</span>
+            <button className={styles.reportClose} onClick={onCloseIntegrity}>
+              閉じる
+            </button>
+          </div>
+          <pre className={styles.reportBody}>{report}</pre>
+          {orphanCount > 0 && (
+            <button className={styles.reportAction} onClick={onOpenRefs}>
+              文献タブで孤児キーを見る
+            </button>
+          )}
+        </div>
+      )}
+
+      {showRender && (
+        <div className={styles.report} data-ok={render.ok === true} data-ng={render.ok === false}>
+          <div className={styles.reportHead}>
+            <span className={styles.reportTitle}>
+              レンダー
+              {render.ok === true && " — 成功"}
+              {render.ok === false && " — 失敗/中止"}
+            </span>
+            <button className={styles.reportClose} onClick={onCloseRender}>
+              閉じる
+            </button>
+          </div>
+          <pre className={styles.reportBody}>{render.log}</pre>
+          <div className={styles.reportActions}>
+            {render.ok === true && render.outputPath && (
+              <button
+                className={styles.reportAction}
+                onClick={() => onOpenOutput(render.outputPath!)}
+              >
+                出力を開く
+              </button>
+            )}
+            {render.ok === false && markerCount > 0 && !render.running && (
+              <button className={styles.reportActionShu} onClick={onIgnoreLint}>
+                警告を無視してレンダー
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

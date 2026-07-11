@@ -113,6 +113,40 @@
   margin-bottom: 4px;
 }
 
+.noMatchActions {
+  margin-top: 10px;
+}
+
+.noMatchBtn {
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  border: 1px solid var(--c-lineStrong);
+  background: var(--c-page);
+  font-family: var(--font-ui);
+  color: var(--c-ink);
+}
+
+.fillBtn {
+  margin-top: 9px;
+  width: 100%;
+  padding: 7px 0;
+  border-radius: 5px;
+  border: none;
+  background: var(--c-shu);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 700;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.fillBtn:hover {
+  background: #a33325;
+}
+
 /* --- トピック・エントリ --- */
 .topicBlock {
   margin-bottom: 18px;

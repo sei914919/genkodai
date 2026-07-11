@@ -87,6 +87,55 @@
   flex: 1;
 }
 
+/* ===== git 状態（FR20） ===== */
+.gitState {
+  font-size: 11px;
+  color: var(--c-faint);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.gitState[data-state="dirty"] {
+  color: var(--c-shu);
+}
+
+.gitDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--c-ok);
+}
+
+.gitState[data-state="dirty"] .gitDot {
+  background: var(--c-shu);
+}
+
+.gitState[data-state="norepo"] .gitDot,
+.gitState[data-state="unresolved"] .gitDot {
+  background: var(--c-faint);
+}
+
+.renderBtn {
+  font-size: 12px;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  padding: 5px 14px;
+  border-radius: 5px;
+  border: 1px solid var(--c-ink);
+  background: var(--c-ink);
+  color: var(--c-page);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.renderBtn:disabled,
+.openBtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .count {
   font-size: 12px;
   color: var(--c-sub);
@@ -141,6 +190,93 @@
   border-radius: 3px;
   padding: 56px 64px 64px;
   box-shadow: 0 1px 3px rgba(60, 50, 30, 0.06);
+}
+
+/* ===== レポート（レンダー・整合チェック） ===== */
+.reports {
+  max-width: 660px;
+  margin: -60px auto 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.report {
+  background: var(--c-page);
+  border: 1px solid var(--c-lineStrong);
+  border-left: 3px solid var(--c-sub);
+  border-radius: 6px;
+  padding: 12px 14px;
+}
+
+.report[data-ok="true"] {
+  border-left-color: var(--c-ok);
+}
+
+.report[data-ng="true"] {
+  border-left-color: var(--c-shu);
+}
+
+.reportHead {
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.reportTitle {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.reportClose {
+  margin-left: auto;
+  border: none;
+  background: none;
+  color: var(--c-sub);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.reportBody {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.8;
+  color: var(--c-ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.reportActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.reportAction,
+.reportActionShu {
+  font-size: 12px;
+  font-family: var(--font-ui);
+  padding: 5px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.reportAction {
+  border: 1px solid var(--c-lineStrong);
+  background: var(--c-chrome);
+  color: var(--c-ink);
+}
+
+.reportActionShu {
+  border: 1px solid var(--c-shuLine);
+  background: var(--c-shuBg);
+  color: var(--c-shu);
+  font-weight: 700;
 }
 
 /* ===== ウェルカム ===== */
