@@ -8,6 +8,7 @@ import { SettingsDialog } from "./SettingsDialog";
 import { baseName, listQmdFiles } from "./fileio";
 import { loadResources } from "./loadProject";
 import { insertRequireCitation } from "./editorActions";
+import { fireAndReport } from "./async";
 import { loadSettings, missingHint, resolveBins } from "./binPaths";
 import { gitCommitAll, gitState } from "./git";
 import { integrityReport, renderQuarto } from "./workflow";
@@ -57,7 +58,6 @@ export default function App() {
       const settings = await loadSettings();
       setBins(await resolveBins(settings), settings);
     })().catch((e) => setNotice(`パス解決に失敗しました: ${e}`));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // FR8: Cmd+Shift+F で要出典マーカー挿入（CodeMirror の keymap には触れない）
@@ -83,7 +83,7 @@ export default function App() {
   }, [projectDir, bins.git, setGit]);
 
   useEffect(() => {
-    void refreshGit();
+    fireAndReport(refreshGit(), "git状態の取得");
   }, [refreshGit, saveStatus]);
 
   const chooseFolder = async () => {
@@ -231,7 +231,7 @@ export default function App() {
             </button>
             <button
               className={styles.renderBtn}
-              onClick={() => void runRender(false)}
+              onClick={() => fireAndReport(runRender(false), "レンダー")}
               disabled={!bins.quarto || render.running}
               title={bins.quarto ? "quarto render を実行" : missingHint("quarto")}
             >
@@ -281,8 +281,8 @@ export default function App() {
               <Editor />
             </div>
             <ReportPanel
-              onOpenOutput={(p) => void openOutput(p)}
-              onIgnoreLint={() => void runRender(true)}
+              onOpenOutput={(p) => fireAndReport(openOutput(p), "出力を開く")}
+              onIgnoreLint={() => fireAndReport(runRender(true), "レンダー")}
               onCloseRender={() => setRender({ ok: null, log: "", outputPath: null })}
               onCloseIntegrity={() => setIntegrityReport(null)}
               onOpenRefs={() => setRightTab("refs")}

@@ -5,6 +5,7 @@ import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { watch } from "@tauri-apps/plugin-fs";
 import { atomicSave, contentHash, diskHash, loadFile, readFileRaw } from "./fileio";
+import { fireAndReport } from "./async";
 import { useAppStore } from "./store";
 import { derive } from "./parsers/derive";
 import { semiWysiwyg } from "./decorations";
@@ -85,7 +86,9 @@ export function Editor() {
 
   const scheduleAutosave = () => {
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
-    autosaveTimerRef.current = setTimeout(() => void saveNow(), AUTOSAVE_IDLE_MS);
+    autosaveTimerRef.current = setTimeout(() => {
+      fireAndReport(saveNow(), "自動保存");
+    }, AUTOSAVE_IDLE_MS);
   };
 
   const replaceBuffer = (text: string, keepCursor: boolean) => {
@@ -114,7 +117,7 @@ export function Editor() {
               key: "Mod-s",
               preventDefault: true,
               run: () => {
-                void saveNow();
+                fireAndReport(saveNow(), "保存");
                 return true;
               },
             },
@@ -147,7 +150,6 @@ export function Editor() {
       loadedPathRef.current = null;
       setView(null);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ファイル切替：バッファ破棄前に未保存変更を確認し、あれば保存してから読み込む（絶対規則2）
@@ -168,7 +170,6 @@ export function Editor() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPath]);
 
   // ファイル監視（§5.7）：内容ハッシュ比較で自己保存イベントを無視する。
@@ -200,9 +201,13 @@ export function Editor() {
       setNotice("外部変更を検知し、再読み込みしました");
     };
 
-    watch(projectDir, (e) => void onEvent(e as { paths: string[] }), {
-      delayMs: 300,
-    })
+    watch(
+      projectDir,
+      (e) => {
+        fireAndReport(onEvent(e as { paths: string[] }), "外部変更の処理");
+      },
+      { delayMs: 300 },
+    )
       .then((fn) => {
         if (disposed) fn();
         else unwatch = fn;
@@ -214,7 +219,6 @@ export function Editor() {
       disposed = true;
       unwatch?.();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectDir]);
 
   return <div ref={containerRef} />;
