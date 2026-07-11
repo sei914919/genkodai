@@ -6,7 +6,10 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { watch } from "@tauri-apps/plugin-fs";
 import { atomicSave, contentHash, diskHash, loadFile, readFileRaw } from "./fileio";
 import { useAppStore } from "./store";
+import { derive } from "./parsers/derive";
 import { C, FONT_MS } from "./theme";
+
+const DERIVE_DEBOUNCE_MS = 150; // SPEC §5.6
 
 // プログラム起因のバッファ置換（読込・外部変更の再読込）を編集と区別するための注釈。
 // これが付いたトランザクションでは dirty 化・自動保存予約をしない。
@@ -32,23 +35,31 @@ export function Editor() {
   const currentPath = useAppStore((s) => s.currentPath);
   const setSaveStatus = useAppStore((s) => s.setSaveStatus);
   const setNotice = useAppStore((s) => s.setNotice);
+  const setView = useAppStore((s) => s.setView);
+  const setDerived = useAppStore((s) => s.setDerived);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const loadedPathRef = useRef<string | null>(null);
   const dirtyRef = useRef(false);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const deriveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savingRef = useRef(false);
+
+  // 読み取り専用：doc から派生情報（目次・マーカー・脚注・字数）を再計算してストアへ。
+  // IME・入力・keymap・装飾には一切関与しない（§5.6）。
+  const scheduleDerive = () => {
+    if (deriveTimerRef.current) clearTimeout(deriveTimerRef.current);
+    deriveTimerRef.current = setTimeout(() => {
+      const view = viewRef.current;
+      if (view) setDerived(derive(view.state.doc.toString()));
+    }, DERIVE_DEBOUNCE_MS);
+  };
 
   const saveNow = async (): Promise<void> => {
     const view = viewRef.current;
     const path = loadedPathRef.current;
     if (!view || !path || !dirtyRef.current || savingRef.current) return;
-    if (view.composing) {
-      // IME変換中の保存はライブ変換の確定を誘発しうるため、変換終了後に延期する
-      scheduleAutosave();
-      return;
-    }
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     savingRef.current = true;
     setSaveStatus("saving");
@@ -114,6 +125,7 @@ export function Editor() {
           paperTheme,
           EditorView.updateListener.of((u) => {
             if (!u.docChanged) return;
+            scheduleDerive(); // 読込・編集を問わず派生情報を更新
             if (u.transactions.some((tr) => tr.annotation(ProgrammaticLoad))) return;
             dirtyRef.current = true;
             setSaveStatus("dirty");
@@ -124,11 +136,14 @@ export function Editor() {
       parent: containerRef.current,
     });
     viewRef.current = view;
+    setView(view);
     return () => {
       if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+      if (deriveTimerRef.current) clearTimeout(deriveTimerRef.current);
       view.destroy();
       viewRef.current = null;
       loadedPathRef.current = null;
+      setView(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

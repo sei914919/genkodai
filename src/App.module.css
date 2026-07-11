@@ -87,6 +87,27 @@
   flex: 1;
 }
 
+.count {
+  font-size: 12px;
+  color: var(--c-sub);
+  white-space: nowrap;
+}
+
+.markerBadge {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 4px;
+  color: var(--c-ok);
+  background: var(--c-okBg);
+  white-space: nowrap;
+}
+
+.markerBadge[data-open="true"] {
+  color: var(--c-shu);
+  background: var(--c-shuBg);
+}
+
 .openBtn {
   font-size: 12px;
   font-family: var(--font-ui);
@@ -96,6 +117,13 @@
   background: var(--c-page);
   color: var(--c-ink);
   cursor: pointer;
+}
+
+/* ===== 3ペイン ===== */
+.workspace {
+  flex: 1;
+  display: flex;
+  min-height: 0;
 }
 
 /* ===== 中央：紙面カード ===== */

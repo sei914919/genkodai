@@ -1,0 +1,87 @@
+.rail {
+  width: 218px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--c-lineStrong);
+  background: var(--c-rail);
+  overflow-y: auto;
+  padding: 14px 0;
+}
+
+.sectionLabel {
+  padding: 0 16px 8px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--c-faint);
+  font-weight: 700;
+}
+
+.tocItem,
+.tocItemActive {
+  padding: 6px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: var(--font-ms);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tocItem:hover {
+  background: rgba(0, 0, 0, 0.045);
+}
+
+.tocItemActive {
+  background: rgba(0, 0, 0, 0.06);
+  font-weight: 700;
+  border-left: 2px solid var(--c-ink);
+}
+
+.markerLabel {
+  margin: 14px 16px 8px;
+  border-top: 1px solid var(--c-lineStrong);
+  padding-top: 12px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--c-shu);
+  font-weight: 700;
+}
+
+.markerItem {
+  padding: 6px 16px;
+  font-size: 12.5px;
+  cursor: pointer;
+  display: flex;
+  gap: 7px;
+  align-items: baseline;
+  color: var(--c-ink);
+}
+
+.markerItem:hover {
+  background: rgba(0, 0, 0, 0.045);
+}
+
+.markerItem[data-selected="true"] {
+  background: var(--c-shuBg);
+}
+
+.markerDot {
+  color: var(--c-shu);
+  font-size: 11px;
+  flex-shrink: 0;
+  width: 12px;
+}
+
+.empty {
+  padding: 4px 16px;
+  font-size: 11.5px;
+  color: var(--c-faint);
+}
+
+.hint {
+  margin: 14px 16px 0;
+  border-top: 1px solid var(--c-lineStrong);
+  padding-top: 12px;
+  font-size: 11px;
+  color: var(--c-faint);
+  line-height: 1.7;
+}
