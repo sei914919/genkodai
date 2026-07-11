@@ -72,6 +72,15 @@ export function SettingsDialog() {
           </div>
         ))}
 
+        <div className={styles.templateNote}>
+          <div className={styles.templateTitle}>新規プロジェクトのテンプレート</div>
+          新規プロジェクトの雛形は下記フォルダの複製です。中身を直接編集すれば、
+          自分の書き出し方に育てられます（初回起動時に既定を書き出します）。
+          <div className={styles.templatePath}>
+            ~/Library/Application Support/com.sei.genkodai/templates/default/
+          </div>
+        </div>
+
         <div className={styles.actions}>
           <button
             className={styles.cancel}

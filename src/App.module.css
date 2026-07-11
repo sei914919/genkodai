@@ -300,16 +300,32 @@
   margin: 0 0 22px;
 }
 
-.openBtnLarge {
+.welcomeActions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.openBtnLarge,
+.newBtnLarge {
   font-size: 13px;
   font-family: var(--font-ui);
   font-weight: 700;
   padding: 8px 22px;
   border-radius: 5px;
+  cursor: pointer;
+}
+
+.openBtnLarge {
   border: 1px solid var(--c-ink);
   background: var(--c-ink);
   color: var(--c-page);
-  cursor: pointer;
+}
+
+.newBtnLarge {
+  border: 1px solid var(--c-lineStrong);
+  background: var(--c-page);
+  color: var(--c-ink);
 }
 
 /* ===== トースト ===== */

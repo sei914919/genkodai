@@ -5,6 +5,7 @@ import { Editor } from "./Editor";
 import { LeftRail } from "./LeftRail";
 import { RightPanel } from "./RightPanel";
 import { SettingsDialog } from "./SettingsDialog";
+import { NewProjectDialog } from "./NewProjectDialog";
 import { baseName, listQmdFiles } from "./fileio";
 import { loadResources } from "./loadProject";
 import { insertRequireCitation } from "./editorActions";
@@ -46,6 +47,7 @@ export default function App() {
   const setRightTab = useAppStore((s) => s.setRightTab);
 
   const [committing, setCommitting] = useState(false);
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
 
   useEffect(() => {
     if (!notice) return;
@@ -256,6 +258,9 @@ export default function App() {
             </button>
           </>
         )}
+        <button className={styles.openBtn} onClick={() => setNewProjectOpen(true)}>
+          新規プロジェクト
+        </button>
         <button
           className={styles.openBtn}
           onClick={() => setSettingsOpen(true)}
@@ -277,9 +282,17 @@ export default function App() {
                 <p className={styles.welcomeText}>
                   執筆環境v2のプロジェクトフォルダ（paper.qmd / notes/ / refs.bib）を開いてください。
                 </p>
-                <button className={styles.openBtnLarge} onClick={chooseFolder}>
-                  フォルダを開く
-                </button>
+                <div className={styles.welcomeActions}>
+                  <button className={styles.openBtnLarge} onClick={chooseFolder}>
+                    フォルダを開く
+                  </button>
+                  <button
+                    className={styles.newBtnLarge}
+                    onClick={() => setNewProjectOpen(true)}
+                  >
+                    新規プロジェクト
+                  </button>
+                </div>
               </>
             ) : (
               <p className={styles.welcomeText}>
@@ -311,6 +324,7 @@ export default function App() {
       )}
 
       <SettingsDialog />
+      {newProjectOpen && <NewProjectDialog onClose={() => setNewProjectOpen(false)} />}
       {notice && <div className={styles.toast}>{notice}</div>}
     </div>
   );

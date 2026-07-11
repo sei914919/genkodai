@@ -52,6 +52,26 @@ export function gitState(gitPath: string, dir: string): Promise<GitState> {
   });
 }
 
+// 新規プロジェクトの版管理を開始する（Phase 4a）。失敗はエラーにせず理由を返し、
+// 呼び出し側で「案内」として扱う（git 未解決でもプロジェクト作成自体は成立させる）。
+export function gitInitAndCommit(
+  gitPath: string,
+  dir: string,
+  message: string,
+): Promise<{ ok: boolean; detail: string }> {
+  return serialized(async () => {
+    const init = await runProgram(gitPath, ["init"], dir);
+    if (init.code !== 0) return { ok: false, detail: init.stderr || "git init に失敗" };
+    const add = await runProgram(gitPath, ["add", "-A"], dir);
+    if (add.code !== 0) return { ok: false, detail: add.stderr || "git add に失敗" };
+    const commit = await runProgram(gitPath, ["commit", "-m", message], dir);
+    if (commit.code !== 0) {
+      return { ok: false, detail: commit.stderr || commit.stdout || "git commit に失敗" };
+    }
+    return { ok: true, detail: commit.stdout.split("\n")[0] ?? "" };
+  });
+}
+
 // ワークツリー全体をコミットする（FR16のpre-fillと同じ意図：監査点を丸ごと固定する）。
 // 変更が無ければ commit せず false を返す。
 export function gitCommitAll(
