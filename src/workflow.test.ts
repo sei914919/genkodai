@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { buildFootnoteText, integrityReport, stripKeyTag } from "./workflow";
+import {
+  buildFootnoteText,
+  integrityReport,
+  parseOutputPath,
+  stripAnsi,
+  stripKeyTag,
+} from "./workflow";
 import type { NoteEntry } from "./parsers/notes";
+
 
 const entry = (source: string): NoteEntry => ({
   source,
@@ -73,5 +80,31 @@ describe("integrityReport", () => {
     expect(r).toContain("要出典が 3 件");
     expect(r).toContain("未保存の変更があります");
     expect(r).toContain("パース警告");
+  });
+});
+
+describe("stripAnsi / parseOutputPath", () => {
+  const ESC = "\u001b";
+
+  it("ANSIカラーを除去する", () => {
+    expect(stripAnsi(`${ESC}[91mERROR${ESC}[0m`)).toBe("ERROR");
+  });
+
+  it("素のログから出力パスを拾う", () => {
+    expect(parseOutputPath("Output created: paper.pdf")).toBe("paper.pdf");
+  });
+
+  // 実際の quarto はカラー出力を混ぜてくる（この混入で「出力を開く」が壊れうる）
+  it("ANSI混じりのログからも出力パスを拾う", () => {
+    const log = [
+      `${ESC}[1m${ESC}[34mrunning lualatex - 2${ESC}[39m${ESC}[22m`,
+      "",
+      `${ESC}[1mOutput created: paper.pdf${ESC}[0m`,
+    ].join("\n");
+    expect(parseOutputPath(log)).toBe("paper.pdf");
+  });
+
+  it("出力行が無ければ null", () => {
+    expect(parseOutputPath("ERROR: something went wrong")).toBeNull();
   });
 });

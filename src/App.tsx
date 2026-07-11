@@ -137,6 +137,16 @@ export default function App() {
     }
   };
 
+  // FR18: 出力ファイルを既定アプリで開く。失敗を握りつぶすと「押しても何も起きない」に
+  // なるため、必ず理由を表示する。
+  const openOutput = async (path: string) => {
+    try {
+      await openPath(path);
+    } catch (e) {
+      setNotice(`出力を開けませんでした: ${e}`);
+    }
+  };
+
   // FR20 手動コミット
   const commit = async () => {
     const s = useAppStore.getState();
@@ -271,7 +281,7 @@ export default function App() {
               <Editor />
             </div>
             <ReportPanel
-              onOpenOutput={(p) => void openPath(p)}
+              onOpenOutput={(p) => void openOutput(p)}
               onIgnoreLint={() => void runRender(true)}
               onCloseRender={() => setRender({ ok: null, log: "", outputPath: null })}
               onCloseIntegrity={() => setIntegrityReport(null)}

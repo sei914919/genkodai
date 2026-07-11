@@ -42,6 +42,21 @@ export interface RenderOutcome {
   outputPath: string | null;
 }
 
+// quarto はカラー出力のANSIエスケープ（ESC [ ... m）を混ぜてくるため、パス抽出前に除去する。
+// ESC が欠けた残骸（"[0m" のみ）も拾えるよう ESC は任意にする。
+const ANSI_RE = /\u001b?\[[0-9;]*m/g;
+
+export function stripAnsi(s: string): string {
+  return s.replace(ANSI_RE, "");
+}
+
+// ログから出力ファイルの相対パスを取り出す（"Output created: paper.pdf"）。
+export function parseOutputPath(log: string): string | null {
+  const m = /Output created:\s*(.+)/.exec(stripAnsi(log));
+  const rel = m?.[1]?.trim();
+  return rel ? rel : null;
+}
+
 export async function renderQuarto(
   quartoPath: string,
   projectDir: string,
@@ -51,13 +66,12 @@ export async function renderQuarto(
   const out = await runProgram(quartoPath, ["render", file], projectDir);
   const log = [out.stdout, out.stderr].filter(Boolean).join("\n");
   if (out.code !== 0) return { ok: false, log, outputPath: null };
-  // 出力ファイルはログの "Output created: <path>" から拾う
-  const m = /Output created:\s*(.+)/.exec(log);
-  const rel = m?.[1]?.trim();
+  const rel = parseOutputPath(log);
   return {
     ok: true,
     log,
-    outputPath: rel ? `${projectDir}/${rel}` : null,
+    // 相対パスなら projectDir 基準、絶対パスならそのまま
+    outputPath: rel ? (rel.startsWith("/") ? rel : `${projectDir}/${rel}`) : null,
   };
 }
 

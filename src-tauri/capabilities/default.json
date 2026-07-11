@@ -7,6 +7,10 @@
     "core:default",
     "core:path:default",
     "opener:default",
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [{ "path": "**" }, { "path": "/**" }]
+    },
     "dialog:allow-open",
     "fs:default",
     "fs:allow-read-text-file",
