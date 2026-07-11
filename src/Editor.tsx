@@ -7,6 +7,7 @@ import { watch } from "@tauri-apps/plugin-fs";
 import { atomicSave, contentHash, diskHash, loadFile, readFileRaw } from "./fileio";
 import { useAppStore } from "./store";
 import { derive } from "./parsers/derive";
+import { semiWysiwyg } from "./decorations";
 import { C, FONT_MS } from "./theme";
 
 const DERIVE_DEBOUNCE_MS = 150; // SPEC §5.6
@@ -123,6 +124,7 @@ export function Editor() {
           markdown({ base: markdownLanguage }),
           EditorView.lineWrapping,
           paperTheme,
+          semiWysiwyg(),
           EditorView.updateListener.of((u) => {
             if (!u.docChanged) return;
             scheduleDerive(); // 読込・編集を問わず派生情報を更新
