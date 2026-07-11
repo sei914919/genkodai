@@ -1,7 +1,7 @@
 # CLAUDE.md — 原稿台（GENKŌDAI）開発ガイド
 
 このリポジトリは学術論文執筆用デスクトップエディタ「原稿台」の開発リポジトリ。
-仕様は `SPEC.md`（v1.1）が唯一の正。UIの見た目は `design/writing_studio_mockup.jsx` が正。
+仕様は `SPEC.md`（v1.2）が唯一の正。UIの見た目は `design/writing_studio_mockup.jsx` が正。
 判断に迷ったら実装せずに質問すること。
 
 ## プロジェクトの性格
@@ -78,7 +78,7 @@
 
 ## 参照ファイル
 
-- `SPEC.md` — 全要件・フェーズ・AC（v1.1。§8に変更履歴）
+- `SPEC.md` — 全要件・フェーズ・AC（v1.2。§8に変更履歴）
 - `design/writing_studio_mockup.jsx` — レイアウト・配色・動線の正
 - `docs/writing-env-v2.md` — 土台となる執筆環境v2仕様（プロジェクト構造・v2-NFR群の出典）
   ※リポジトリ作成時に SPEC.md §0 のチェックリストに従い、全参照ファイルを配置してから着手すること
