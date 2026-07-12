@@ -1,5 +1,6 @@
 // 外部バイナリのパス解決（SPEC §5.8）。
-// 1. 起動時に `/bin/zsh -lc` で claude/quarto/git のフルパスを取得しメモリ保持
+// 1. 起動時に `<shell> -lc`（shell.ts が探索した bash/zsh）で claude/quarto/git の
+//    フルパスを取得しメモリ保持
 // 2. 解決失敗分は設定ダイアログで絶対パスを手動指定（Tauri app config 領域に保存）
 // 3. 未解決バイナリに依存する機能はUIで無効化＋案内（呼び出し側の責務）
 //

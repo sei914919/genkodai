@@ -3,9 +3,24 @@
 // GUIアプリ（Finder/Dock起動）はシェルのPATHを継承しないため、外部バイナリは
 // 生のコマンド名では呼ばない。必ず binPaths で解決したフルパスを渡すこと。
 // plugin-shell のスコープは固定コマンドしか許可できないため、ログインシェル
-// `/bin/zsh -lc` を唯一の許可コマンドとし、その中でフルパスを実行する。
+// `<shell> -lc` を許可コマンドとし、その中でフルパスを実行する。
+// 使うシェルは起動時に shell.ts が探索し（/bin/bash → /bin/zsh）、setActiveShell で
+// ここへ注入する。capabilities/default.json には両シェルを allow 併記してある。
 // 引数はシェル解釈を避けるため必ず単一引用符でクォートする。
 import { Command } from "@tauri-apps/plugin-shell";
+import { SHELL_CANDIDATES, type ShellInfo } from "./shell";
+
+// 起動時に確定するシェル。未設定時は探索順の先頭（bash）を仮定する。
+// name は capability の allow 名と一致していなければ Command.create が拒否される。
+let activeShell: ShellInfo = SHELL_CANDIDATES[0];
+
+export function setActiveShell(shell: ShellInfo): void {
+  activeShell = shell;
+}
+
+export function getActiveShell(): ShellInfo {
+  return activeShell;
+}
 
 export interface RunResult {
   code: number | null;
@@ -28,9 +43,9 @@ export async function runProgram(
   return runScript(script, cwd);
 }
 
-// zsh -lc に渡す生スクリプト（バイナリ解決など、シェル組み込みが要る場合のみ使う）
+// <shell> -lc に渡す生スクリプト（バイナリ解決など、シェル組み込みが要る場合のみ使う）
 export async function runScript(script: string, cwd?: string): Promise<RunResult> {
-  const cmd = Command.create("zsh", ["-lc", script], cwd ? { cwd } : undefined);
+  const cmd = Command.create(activeShell.name, ["-lc", script], cwd ? { cwd } : undefined);
   const out = await cmd.execute();
   return {
     code: out.code,
@@ -53,7 +68,7 @@ export async function spawnProgram(
   cwd?: string,
 ): Promise<Spawned> {
   const script = "exec " + [programFullPath, ...args].map(shq).join(" ");
-  const cmd = Command.create("zsh", ["-lc", script], cwd ? { cwd } : undefined);
+  const cmd = Command.create(activeShell.name, ["-lc", script], cwd ? { cwd } : undefined);
   let stdout = "";
   let stderr = "";
   cmd.stdout.on("data", (d: string) => {

@@ -11,6 +11,8 @@ import { loadResources } from "./loadProject";
 import { insertRequireCitation } from "./editorActions";
 import { fireAndReport } from "./async";
 import { loadSettings, missingHint, resolveBins } from "./binPaths";
+import { resolveShell } from "./shell";
+import { setActiveShell } from "./runner";
 import { gitCommitAll, gitState } from "./git";
 import { integrityReport, renderQuarto } from "./workflow";
 import { snapshotProject } from "./snapshot";
@@ -40,6 +42,7 @@ export default function App() {
   const setNotice = useAppStore((s) => s.setNotice);
   const setNotesData = useAppStore((s) => s.setNotesData);
   const setBins = useAppStore((s) => s.setBins);
+  const setShell = useAppStore((s) => s.setShell);
   const setSettingsOpen = useAppStore((s) => s.setSettingsOpen);
   const setGit = useAppStore((s) => s.setGit);
   const setRender = useAppStore((s) => s.setRender);
@@ -55,15 +58,20 @@ export default function App() {
     return () => clearTimeout(t);
   }, [notice, setNotice]);
 
-  // §5.8-1: 起動時に一度だけ外部バイナリのフルパスを解決する
+  // §5.8-1: 起動時に一度だけ、まず実行シェルを探索（/bin/bash→/bin/zsh）してから
+  // それを使って外部バイナリのフルパスを解決する。シェルが無ければ探索は失敗するが、
+  // 設定ダイアログの手動絶対パス指定で救済できる（＝機能欠損の理由が可視化される）。
   useEffect(() => {
     (async () => {
+      const shell = await resolveShell();
+      if (shell) setActiveShell(shell);
+      setShell(shell);
       const settings = await loadSettings();
       setBins(await resolveBins(settings), settings);
     })().catch((e) => setNotice(`パス解決に失敗しました: ${e}`));
   }, []);
 
-  // FR8: Cmd+Shift+F で要出典マーカー挿入（CodeMirror の keymap には触れない）
+  // FR8: Cmd/Ctrl+Shift+F で要出典マーカー挿入（CodeMirror の keymap には触れない）
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.code === "KeyF") {

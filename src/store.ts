@@ -4,6 +4,7 @@ import type { Derived } from "./parsers/derive";
 import type { BibEntry } from "./parsers/bibtex";
 import type { ParsedNoteFile } from "./parsers/notes";
 import type { BinPaths, Settings } from "./binPaths";
+import type { ShellInfo } from "./shell";
 import type { FillProposal } from "./proposalValidate";
 import { NOT_A_REPO, type GitState } from "./git";
 
@@ -71,6 +72,9 @@ interface AppState {
   bins: BinPaths;
   settings: Settings;
   binsResolved: boolean;
+  // 外部実行に使うシェル（起動時に探索）。null = 利用可能なシェルが無い
+  shell: ShellInfo | null;
+  shellResolved: boolean;
   settingsOpen: boolean;
   git: GitState;
   render: RenderState;
@@ -93,6 +97,7 @@ interface AppState {
   selectMarker: (idx: number | null) => void;
 
   setBins: (bins: BinPaths, settings: Settings) => void;
+  setShell: (shell: ShellInfo | null) => void;
   setSettingsOpen: (open: boolean) => void;
   setGit: (g: GitState) => void;
   setRender: (r: Partial<RenderState>) => void;
@@ -122,6 +127,8 @@ export const useAppStore = create<AppState>((set) => ({
   bins: { claude: null, quarto: null, git: null },
   settings: { manualPaths: {} },
   binsResolved: false,
+  shell: null,
+  shellResolved: false,
   settingsOpen: false,
   git: NOT_A_REPO,
   render: { running: false, ok: null, log: "", outputPath: null },
@@ -157,6 +164,7 @@ export const useAppStore = create<AppState>((set) => ({
   selectMarker: (idx) => set({ selectedMarkerIdx: idx, rightTab: "notes" }),
 
   setBins: (bins, settings) => set({ bins, settings, binsResolved: true }),
+  setShell: (shell) => set({ shell, shellResolved: true }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setGit: (git) => set({ git }),
   setRender: (r) => set((s) => ({ render: { ...s.render, ...r } })),

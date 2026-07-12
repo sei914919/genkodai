@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { modKey } from "./platform";
 import { useAppStore } from "./store";
 import { jumpTo } from "./editorActions";
 import { rankByTopic } from "./matching";
@@ -37,7 +38,7 @@ export function RightPanel() {
           fillMarker(view, selectedMarker, entry);
           selectMarker(null);
           setNotice(
-            "脚注を挿入しました — 逐語引用と頁の最終照合は人間の責任です（v2-NFR4）。Cmd+Zで取り消せます",
+            `脚注を挿入しました — 逐語引用と頁の最終照合は人間の責任です（v2-NFR4）。${modKey()}+Zで取り消せます`,
           );
         }
       : null;

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { BIN_NAMES, resolveBins, saveSettings, type BinName } from "./binPaths";
+import { examplePath, isMac } from "./platform";
 import { useAppStore } from "./store";
 import styles from "./SettingsDialog.module.css";
 
@@ -9,6 +10,8 @@ export function SettingsDialog() {
   const open = useAppStore((s) => s.settingsOpen);
   const bins = useAppStore((s) => s.bins);
   const settings = useAppStore((s) => s.settings);
+  const shell = useAppStore((s) => s.shell);
+  const shellResolved = useAppStore((s) => s.shellResolved);
   const setSettingsOpen = useAppStore((s) => s.setSettingsOpen);
   const setBins = useAppStore((s) => s.setBins);
   const setNotice = useAppStore((s) => s.setNotice);
@@ -46,10 +49,24 @@ export function SettingsDialog() {
       <div className={styles.dialog} onClick={(e) => e.stopPropagation()}>
         <div className={styles.title}>外部コマンドのパス</div>
         <p className={styles.desc}>
-          Finderから起動したアプリはシェルのPATHを引き継がないため、
+          ファイラ／デスクトップから起動したアプリはシェルのPATHを引き継がないため、
           見つからないコマンドは絶対パスを指定してください（例:
-          <code>/opt/homebrew/bin/quarto</code>）。空欄なら自動解決の結果を使います。
+          <code>{examplePath("quarto")}</code>）。空欄なら自動解決の結果を使います。
         </p>
+
+        {/* 解決に使ったシェルを明示する。-lc が読むプロファイルはシェルで違う
+            （bash は ~/.bashrc を読まない）ため、解決漏れの原因究明にはシェル名が要る。 */}
+        <div className={styles.shellLine} data-ok={!!shell}>
+          {shell ? (
+            <>
+              解決に使ったシェル: <code>{shell.path}</code>（{shell.name}）
+            </>
+          ) : shellResolved ? (
+            <>利用可能なシェルが見つかりませんでした（/bin/bash・/bin/zsh のいずれも不在）。下の各コマンドに絶対パスを指定してください。</>
+          ) : (
+            <>シェルを探索中…</>
+          )}
+        </div>
 
         {BIN_NAMES.map((name) => (
           <div key={name} className={styles.row}>
@@ -60,6 +77,11 @@ export function SettingsDialog() {
               </span>
             </div>
             <div className={styles.resolved}>{bins[name] ?? "—"}</div>
+            {!bins[name] && shell && !draft[name]?.trim() && (
+              <div className={styles.reason}>
+                {shell.path} のログインシェル環境では見つかりませんでした。設定で絶対パスを指定してください。
+              </div>
+            )}
             <input
               className={styles.input}
               value={draft[name] ?? ""}
@@ -77,7 +99,9 @@ export function SettingsDialog() {
           新規プロジェクトの雛形は下記フォルダの複製です。中身を直接編集すれば、
           自分の書き出し方に育てられます（初回起動時に既定を書き出します）。
           <div className={styles.templatePath}>
-            ~/Library/Application Support/com.sei.genkodai/templates/default/
+            {isMac()
+              ? "~/Library/Application Support/com.sei.genkodai/templates/default/"
+              : "~/.config/com.sei.genkodai/templates/default/"}
           </div>
         </div>
 

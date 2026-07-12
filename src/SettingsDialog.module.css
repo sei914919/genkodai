@@ -42,6 +42,38 @@
   border-radius: 3px;
 }
 
+.shellLine {
+  font-size: 11.5px;
+  color: var(--c-sub);
+  line-height: 1.8;
+  background: var(--c-chrome);
+  border: 1px solid var(--c-line);
+  border-radius: 5px;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+}
+
+.shellLine[data-ok="false"] {
+  background: var(--c-shuBg);
+  color: var(--c-shu);
+  border-color: var(--c-shuLine);
+}
+
+.shellLine code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--c-page);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.reason {
+  font-size: 11px;
+  color: var(--c-shu);
+  line-height: 1.7;
+  margin-bottom: 6px;
+}
+
 .row {
   margin-bottom: 16px;
   padding-bottom: 14px;
