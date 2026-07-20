@@ -27,7 +27,9 @@ export interface Derived {
   headings: Heading[];
   markers: Marker[];
   footnotes: Footnote[];
-  charCount: number;
+  charCount: number; // 本文字数（脚注・マーカー抜き）
+  charCountWithNotes: number; // 脚注込みの字数
+  wordCount: number; // 英単語数（英訳章・ジャーナル語数制限の目安）
 }
 
 const MARKER_RE = /\^\[要出典:\s*([^\]]*)\]/g;
@@ -114,11 +116,12 @@ export function extractFootnotes(text: string): Footnote[] {
   return footnotes;
 }
 
-// FR7 本文字数：YAMLヘッダ・コードフェンス・脚注・マーカー・行頭記号・空白を除外した文字数。
-export function countChars(text: string): number {
+// 本文の可読テキストを取り出す：YAMLヘッダ・コードフェンス・脚注/マーカー・行頭記号を除外し、
+// 空白は残したまま行を "\n" で連結して返す。字数と英単語数の共通の土台（空白除去は各利用側で行う）。
+function cleanBody(text: string): string {
   const fm = frontmatterRange(text);
   const fmEnd = fm ? fm[1] : 0;
-  let count = 0;
+  const out: string[] = [];
   let inFence = false;
   let offset = 0;
   const lines = text.split("\n");
@@ -133,17 +136,41 @@ export function countChars(text: string): number {
     if (inFence) continue; // コードフェンス内は本文ではない
     let body = line.replace(/\^\[[^\]]*\]/g, ""); // インライン脚注・マーカー除去
     body = body.replace(/^\s*(#{1,6}|>|[-*+])\s+/, ""); // 行頭の見出し・引用・リスト記号
-    body = body.replace(/\s/g, ""); // 空白除去
-    count += [...body].length;
+    out.push(body);
   }
-  return count;
+  return out.join("\n");
+}
+
+// 英単語（ハイフン・アポストロフィで繋がる語を1語と数える）
+const WORD_RE = /[A-Za-z]+(?:['’-][A-Za-z]+)*/g;
+
+// 空白を除いた符号点数（サロゲートペアを1文字として数える）。
+function visibleLength(s: string): number {
+  return [...s.replace(/\s/g, "")].length;
+}
+
+// FR7 本文字数：YAMLヘッダ・コードフェンス・脚注・マーカー・行頭記号・空白を除外した文字数。
+export function countChars(text: string): number {
+  return visibleLength(cleanBody(text));
+}
+
+// 英単語数：本文中のラテン文字の語数。
+export function countWords(text: string): number {
+  return cleanBody(text).match(WORD_RE)?.length ?? 0;
 }
 
 export function derive(text: string): Derived {
+  const footnotes = extractFootnotes(text);
+  const charCount = countChars(text);
+  // 脚注込み：本文字数に各脚注テキスト（空白除去）の文字数を加える。
+  // markers（要出典）は footnotes に含まれないため加算されない。
+  const notesChars = footnotes.reduce((n, f) => n + visibleLength(f.text), 0);
   return {
     headings: extractHeadings(text),
     markers: extractMarkers(text),
-    footnotes: extractFootnotes(text),
-    charCount: countChars(text),
+    footnotes,
+    charCount,
+    charCountWithNotes: charCount + notesChars,
+    wordCount: countWords(text),
   };
 }

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   countChars,
+  countWords,
+  derive,
   extractFootnotes,
   extractHeadings,
   extractMarkers,
@@ -92,5 +94,57 @@ describe("countChars", () => {
 
   it("空文書は0", () => {
     expect(countChars("")).toBe(0);
+  });
+});
+
+describe("countWords", () => {
+  const EN_DOC = `---
+title: Draft
+---
+
+# Intro
+
+Self-preferencing is a well-known issue^[See the remarks.].
+
+Code below:
+
+\`\`\`
+this code word should not count
+\`\`\`
+
+We don't stop here^[要出典: 効果].
+`;
+
+  it("英単語のみ数え、YAML・コードフェンス・脚注/マーカー内は除外する", () => {
+    // Intro(1) / Self-preferencing is a well-known issue(5) /
+    // Code below(2) / We don't stop here(4) = 12。フェンス内・脚注/マーカー内は除外。
+    expect(countWords(EN_DOC)).toBe(12);
+  });
+
+  it("ハイフン・アポストロフィで繋がる語は1語として数える", () => {
+    expect(countWords("well-known state-of-the-art don't")).toBe(3);
+  });
+
+  it("日本語のみの文書は0語", () => {
+    expect(countWords("本文の冒頭。自己優遇は競争課題である。")).toBe(0);
+  });
+});
+
+describe("derive の字数系フィールド", () => {
+  // 本文A^[脚注B]。要出典^[要出典: X]。
+  //   本文（マーカー/脚注除去）= 「本文A。要出典。」= 8字
+  //   脚注テキスト「脚注B」= 3字 → 脚注込み = 11字
+  //   要出典マーカーのテキストは脚注込みに加算しない
+  const DOC = "本文A^[脚注B]。要出典^[要出典: X]。";
+
+  it("charCount は本文のみ（脚注・マーカー抜き）", () => {
+    expect(derive(DOC).charCount).toBe(8);
+  });
+
+  it("charCountWithNotes は本文＋脚注テキスト（要出典は加算しない）", () => {
+    const d = derive(DOC);
+    expect(d.footnotes).toHaveLength(1); // 脚注B のみ
+    expect(d.markers).toHaveLength(1); // 要出典: X
+    expect(d.charCountWithNotes).toBe(11);
   });
 });

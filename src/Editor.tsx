@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Annotation, EditorState } from "@codemirror/state";
+import { Annotation, Compartment, EditorState } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
@@ -9,28 +9,26 @@ import { fireAndReport } from "./async";
 import { useAppStore } from "./store";
 import { derive } from "./parsers/derive";
 import { semiWysiwyg } from "./decorations";
-import { C, FONT_MS } from "./theme";
+import { paperTheme, zoomTheme } from "./editorTheme";
+import { ZOOM_STEP } from "./store";
 
 const DERIVE_DEBOUNCE_MS = 150; // SPEC §5.6
+
+// 選択範囲の字数（空白を除く符号点数。charCount と同じ数え方）
+function selectionCount(state: EditorState): number {
+  let n = 0;
+  for (const r of state.selection.ranges) {
+    if (r.empty) continue;
+    n += [...state.sliceDoc(r.from, r.to).replace(/\s/g, "")].length;
+  }
+  return n;
+}
 
 // プログラム起因のバッファ置換（読込・外部変更の再読込）を編集と区別するための注釈。
 // これが付いたトランザクションでは dirty 化・自動保存予約をしない。
 const ProgrammaticLoad = Annotation.define<boolean>();
 
 const AUTOSAVE_IDLE_MS = 2000;
-
-const paperTheme = EditorView.theme({
-  "&": { fontSize: "15px", backgroundColor: "transparent" },
-  ".cm-scroller": {
-    fontFamily: FONT_MS,
-    lineHeight: "2.05",
-    overflow: "visible",
-  },
-  ".cm-content": { padding: "0", caretColor: C.ink },
-  ".cm-line": { padding: "0" },
-  "&.cm-focused": { outline: "none" },
-  ".cm-cursor, .cm-dropCursor": { borderLeftColor: C.ink },
-});
 
 export function Editor() {
   const projectDir = useAppStore((s) => s.projectDir);
@@ -39,6 +37,10 @@ export function Editor() {
   const setNotice = useAppStore((s) => s.setNotice);
   const setView = useAppStore((s) => s.setView);
   const setDerived = useAppStore((s) => s.setDerived);
+  const setMirrorText = useAppStore((s) => s.setMirrorText);
+  const setSelCount = useAppStore((s) => s.setSelCount);
+  const setZoom = useAppStore((s) => s.setZoom);
+  const zoom = useAppStore((s) => s.zoom);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -47,6 +49,9 @@ export function Editor() {
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const deriveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savingRef = useRef(false);
+  const zoomCompartment = useRef(new Compartment());
+  // wheel ハンドラから最新の zoom を参照するための鏡（リスナ再登録を避ける）
+  const zoomRef = useRef(zoom);
 
   // 読み取り専用：doc から派生情報（目次・マーカー・脚注・字数）を再計算してストアへ。
   // IME・入力・keymap・装飾には一切関与しない（§5.6）。
@@ -54,7 +59,12 @@ export function Editor() {
     if (deriveTimerRef.current) clearTimeout(deriveTimerRef.current);
     deriveTimerRef.current = setTimeout(() => {
       const view = viewRef.current;
-      if (view) setDerived(derive(view.state.doc.toString()));
+      if (!view) return;
+      const text = view.state.doc.toString();
+      setDerived(derive(text));
+      // FR25: 2窓が有効なときだけ参照ペインへ本文の写しを流す（読み取りのみ＝dirty化しない）。
+      // splitView は非リアクティブに読む（このコールバックの再生成を避ける）。
+      if (useAppStore.getState().splitView) setMirrorText(text);
     }, DERIVE_DEBOUNCE_MS);
   };
 
@@ -127,8 +137,13 @@ export function Editor() {
           markdown({ base: markdownLanguage }),
           EditorView.lineWrapping,
           paperTheme,
+          zoomCompartment.current.of(zoomTheme(zoomRef.current)),
           semiWysiwyg(),
           EditorView.updateListener.of((u) => {
+            // 選択字数は選択変更・doc変更どちらでも更新（読み取りのみ＝dirty化しない）
+            if (u.selectionSet || u.docChanged) {
+              setSelCount(selectionCount(u.state));
+            }
             if (!u.docChanged) return;
             scheduleDerive(); // 読込・編集を問わず派生情報を更新
             if (u.transactions.some((tr) => tr.annotation(ProgrammaticLoad))) return;
@@ -151,6 +166,33 @@ export function Editor() {
       setView(null);
     };
   }, []);
+
+  // ズーム倍率の変更を本文フォントに反映（Compartment 差し替え。doc には触れないので
+  // dirty化・自動保存・派生更新のいずれもトリガーしない。カーソル・IME状態も保持される）
+  useEffect(() => {
+    zoomRef.current = zoom;
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: zoomCompartment.current.reconfigure(zoomTheme(zoom)),
+    });
+  }, [zoom]);
+
+  // Ctrl（macは⌘）+ スクロールでズーム。WebView標準ズームを抑止する。
+  // compositionにもkeymapにも触れないため IME 規約に抵触しない。
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      if (e.deltaY === 0) return;
+      const dir = e.deltaY < 0 ? 1 : -1; // 上スクロールで拡大
+      setZoom(zoomRef.current + dir * ZOOM_STEP);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [setZoom]);
 
   // ファイル切替：バッファ破棄前に未保存変更を確認し、あれば保存してから読み込む（絶対規則2）
   useEffect(() => {

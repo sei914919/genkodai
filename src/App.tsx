@@ -1,14 +1,17 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { Editor } from "./Editor";
+import { ReferencePane } from "./ReferencePane";
 import { LeftRail } from "./LeftRail";
 import { RightPanel } from "./RightPanel";
 import { SettingsDialog } from "./SettingsDialog";
+import { StatusBar } from "./StatusBar";
 import { NewProjectDialog } from "./NewProjectDialog";
 import { baseName, listQmdFiles } from "./fileio";
 import { loadResources } from "./loadProject";
 import { forgetProject, loadRecent, rememberProject } from "./recentProjects";
+import { loadPrefs, savePrefs } from "./prefs";
 import { insertRequireCitation } from "./editorActions";
 import { fireAndReport } from "./async";
 import { loadSettings, missingHint, resolveBins } from "./binPaths";
@@ -33,8 +36,6 @@ export default function App() {
   const saveStatus = useAppStore((s) => s.saveStatus);
   const notice = useAppStore((s) => s.notice);
   const recent = useAppStore((s) => s.recent);
-  const charCount = useAppStore((s) => s.derived.charCount);
-  const markerCount = useAppStore((s) => s.derived.markers.length);
   const view = useAppStore((s) => s.view);
   const bins = useAppStore((s) => s.bins);
   const git = useAppStore((s) => s.git);
@@ -51,9 +52,14 @@ export default function App() {
   const setRender = useAppStore((s) => s.setRender);
   const setIntegrityReport = useAppStore((s) => s.setIntegrityReport);
   const setRightTab = useAppStore((s) => s.setRightTab);
+  const zoom = useAppStore((s) => s.zoom);
+  const setZoom = useAppStore((s) => s.setZoom);
+  const splitView = useAppStore((s) => s.splitView);
+  const toggleSplitView = useAppStore((s) => s.toggleSplitView);
 
   const [committing, setCommitting] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const prefsLoaded = useRef(false);
 
   useEffect(() => {
     if (!notice) return;
@@ -65,6 +71,27 @@ export default function App() {
   useEffect(() => {
     fireAndReport(loadRecent().then(setRecent), "最近のプロジェクト読込");
   }, [setRecent]);
+
+  // 起動時にズーム倍率を app config 領域から復元。読み込み完了までは保存しない
+  // （既定値で上書きしないためのガード）。
+  useEffect(() => {
+    fireAndReport(
+      loadPrefs().then((p) => {
+        setZoom(p.zoom);
+        prefsLoaded.current = true;
+      }),
+      "表示設定の読込",
+    );
+  }, [setZoom]);
+
+  // ズーム変更をデバウンス保存（prefs.json のみ。プロジェクトフォルダには書かない）
+  useEffect(() => {
+    if (!prefsLoaded.current) return;
+    const t = setTimeout(() => {
+      fireAndReport(savePrefs({ zoom }), "表示設定の保存");
+    }, 400);
+    return () => clearTimeout(t);
+  }, [zoom]);
 
   // §5.8-1: 起動時に一度だけ、まず実行シェルを探索（/bin/bash→/bin/zsh）してから
   // それを使って外部バイナリのフルパスを解決する。シェルが無ければ探索は失敗するが、
@@ -224,7 +251,7 @@ export default function App() {
     }
   };
 
-  const hasDoc = projectDir && qmdFiles.length > 0;
+  const hasDoc = !!projectDir && qmdFiles.length > 0;
   const gitLabel = !bins.git
     ? "git 未解決"
     : !git.isRepo
@@ -232,7 +259,7 @@ export default function App() {
       : `${git.branch} · ${git.dirty ? `${git.changedFiles}件の変更` : "clean"}`;
 
   return (
-    <div className={styles.app}>
+    <div className={styles.app} style={{ "--zoom": zoom } as CSSProperties}>
       <div className={styles.topbar}>
         <div className={styles.brand}>
           原稿台<span className={styles.brandSub}>GENKŌDAI</span>
@@ -278,10 +305,14 @@ export default function App() {
 
         {hasDoc && (
           <>
-            <span className={styles.count}>{charCount.toLocaleString()} 字</span>
-            <span className={styles.markerBadge} data-open={markerCount > 0}>
-              要出典 {markerCount}
-            </span>
+            <button
+              className={styles.openBtn}
+              onClick={toggleSplitView}
+              data-on={splitView || undefined}
+              title="読み取り専用の参照ペインを開く（FR25）"
+            >
+              2窓
+            </button>
             <button className={styles.openBtn} onClick={runIntegrity}>
               整合チェック
             </button>
@@ -360,21 +391,30 @@ export default function App() {
         <div className={styles.workspace}>
           <LeftRail />
           <div className={styles.center}>
-            <div className={styles.page}>
-              <Editor />
+            <div className={styles.mainPane}>
+              <div className={styles.page}>
+                <Editor />
+              </div>
+              <ReportPanel
+                onOpenOutput={(p) => fireAndReport(openOutput(p), "出力を開く")}
+                onIgnoreLint={() => fireAndReport(runRender(true), "レンダー")}
+                onCommitRender={() => fireAndReport(commitAfterRender(), "コミット")}
+                onCloseRender={() => setRender({ ok: null, log: "", outputPath: null })}
+                onCloseIntegrity={() => setIntegrityReport(null)}
+                onOpenRefs={() => setRightTab("refs")}
+              />
             </div>
-            <ReportPanel
-              onOpenOutput={(p) => fireAndReport(openOutput(p), "出力を開く")}
-              onIgnoreLint={() => fireAndReport(runRender(true), "レンダー")}
-              onCommitRender={() => fireAndReport(commitAfterRender(), "コミット")}
-              onCloseRender={() => setRender({ ok: null, log: "", outputPath: null })}
-              onCloseIntegrity={() => setIntegrityReport(null)}
-              onOpenRefs={() => setRightTab("refs")}
-            />
+            {splitView && (
+              <div className={styles.refPane}>
+                <ReferencePane />
+              </div>
+            )}
           </div>
           <RightPanel />
         </div>
       )}
+
+      <StatusBar hasDoc={hasDoc} />
 
       <SettingsDialog />
       {newProjectOpen && <NewProjectDialog onClose={() => setNewProjectOpen(false)} />}

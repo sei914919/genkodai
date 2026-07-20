@@ -136,27 +136,6 @@
   cursor: default;
 }
 
-.count {
-  font-size: 12px;
-  color: var(--c-sub);
-  white-space: nowrap;
-}
-
-.markerBadge {
-  font-size: 12px;
-  font-weight: 700;
-  padding: 3px 9px;
-  border-radius: 4px;
-  color: var(--c-ok);
-  background: var(--c-okBg);
-  white-space: nowrap;
-}
-
-.markerBadge[data-open="true"] {
-  color: var(--c-shu);
-  background: var(--c-shuBg);
-}
-
 .openBtn {
   font-size: 12px;
   font-family: var(--font-ui);
@@ -168,6 +147,13 @@
   cursor: pointer;
 }
 
+/* トグル系ボタンのオン状態（2窓モード） */
+.openBtn[data-on] {
+  border-color: var(--c-ink);
+  background: var(--c-ink);
+  color: var(--c-page);
+}
+
 /* ===== 3ペイン ===== */
 .workspace {
   flex: 1;
@@ -176,25 +162,45 @@
 }
 
 /* ===== 中央：紙面カード ===== */
+/* .center は横並びの器。スクロールは内側の各ペインが持つ（FR25 2窓モード）。 */
 .center {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* 本エディタ側。split OFF 時はこれ単独で幅いっぱい＝従来と同じ見た目。 */
+.mainPane {
   flex: 1;
   overflow-y: auto;
   min-width: 0;
 }
 
+/* 読み取り専用の参照ペイン（split ON 時のみ描画） */
+.refPane {
+  flex: 1;
+  overflow-y: auto;
+  min-width: 0;
+  border-left: 1px solid var(--c-lineStrong);
+}
+
 .page {
-  max-width: 660px;
+  /* 紙ごとズーム：カード幅とパディングを倍率に連動させる（本文フォントは
+     CodeMirror 側で同率に拡大するため、1行あたりの字数はほぼ一定に保たれる）。 */
+  max-width: calc(660px * var(--zoom, 1));
   margin: 28px auto 80px;
   background: var(--c-page);
   border: 1px solid var(--c-line);
   border-radius: 3px;
-  padding: 56px 64px 64px;
+  padding: calc(56px * var(--zoom, 1)) calc(64px * var(--zoom, 1))
+    calc(64px * var(--zoom, 1));
   box-shadow: 0 1px 3px rgba(60, 50, 30, 0.06);
 }
 
 /* ===== レポート（レンダー・整合チェック） ===== */
 .reports {
-  max-width: 660px;
+  max-width: calc(660px * var(--zoom, 1));
   margin: -60px auto 60px;
   display: flex;
   flex-direction: column;
@@ -380,7 +386,7 @@
 .toast {
   position: fixed;
   left: 50%;
-  bottom: 26px;
+  bottom: 40px; /* 下部ステータスバー(26px)を避ける */
   transform: translateX(-50%);
   background: var(--c-ink);
   color: var(--c-page);

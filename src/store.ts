@@ -46,7 +46,20 @@ const EMPTY_DERIVED: Derived = {
   markers: [],
   footnotes: [],
   charCount: 0,
+  charCountWithNotes: 0,
+  wordCount: 0,
 };
+
+// 原稿テキストのズーム倍率（表示のみ。編集バッファには一切触れない）
+export const ZOOM_MIN = 0.7;
+export const ZOOM_MAX = 2.0;
+export const ZOOM_STEP = 0.1;
+export const ZOOM_DEFAULT = 1.0;
+
+export function clampZoom(z: number): number {
+  if (!Number.isFinite(z)) return ZOOM_DEFAULT;
+  return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(z * 10) / 10));
+}
 
 interface AppState {
   projectDir: string | null;
@@ -61,6 +74,12 @@ interface AppState {
   // エディタ由来の派生情報（FR7/9/10/13）
   view: EditorView | null;
   derived: Derived;
+  selCount: number; // 選択範囲の字数（空白除く。非選択時は0）
+  zoom: number; // 原稿テキストのズーム倍率
+
+  // FR25: 2窓モード（読み取り専用の参照ペイン）。保存・dirty・監視には非関与。
+  splitView: boolean; // 参照ペインの表示（プロジェクトを跨いで保持）
+  mirrorText: string; // 参照ペインへ渡す本文の写し
 
   // 右パネル資源（FR11/12）
   notes: ParsedNoteFile[];
@@ -92,6 +111,11 @@ interface AppState {
   setNotice: (msg: string | null) => void;
   setView: (v: EditorView | null) => void;
   setDerived: (d: Derived) => void;
+  setSelCount: (n: number) => void;
+  setZoom: (z: number) => void;
+  setSplitView: (on: boolean) => void;
+  toggleSplitView: () => void;
+  setMirrorText: (t: string) => void;
   setNotesData: (
     notes: ParsedNoteFile[],
     refs: BibEntry[],
@@ -122,6 +146,11 @@ export const useAppStore = create<AppState>((set) => ({
 
   view: null,
   derived: EMPTY_DERIVED,
+  selCount: 0,
+  zoom: ZOOM_DEFAULT,
+
+  splitView: false,
+  mirrorText: "",
 
   notes: [],
   refs: [],
@@ -151,6 +180,8 @@ export const useAppStore = create<AppState>((set) => ({
       notice: null,
       selectedMarkerIdx: null,
       derived: EMPTY_DERIVED,
+      selCount: 0,
+      mirrorText: "", // splitView はプロジェクトを跨いで保持でよい（FR25）
       notes: [],
       refs: [],
       bibErrors: [],
@@ -166,6 +197,11 @@ export const useAppStore = create<AppState>((set) => ({
   setNotice: (msg) => set({ notice: msg }),
   setView: (v) => set({ view: v }),
   setDerived: (d) => set({ derived: d }),
+  setSelCount: (selCount) => set({ selCount }),
+  setZoom: (z) => set({ zoom: clampZoom(z) }),
+  setSplitView: (splitView) => set({ splitView }),
+  toggleSplitView: () => set((s) => ({ splitView: !s.splitView })),
+  setMirrorText: (mirrorText) => set({ mirrorText }),
   setNotesData: (notes, refs, bibErrors, orphanKeys) =>
     set({ notes, refs, bibErrors, orphanKeys }),
   setRightTab: (t) => set({ rightTab: t }),
