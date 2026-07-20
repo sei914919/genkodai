@@ -56,6 +56,8 @@ export default function App() {
   const setZoom = useAppStore((s) => s.setZoom);
   const splitView = useAppStore((s) => s.splitView);
   const toggleSplitView = useAppStore((s) => s.toggleSplitView);
+  const refSide = useAppStore((s) => s.refSide);
+  const setRefSide = useAppStore((s) => s.setRefSide);
 
   const [committing, setCommitting] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
@@ -78,20 +80,21 @@ export default function App() {
     fireAndReport(
       loadPrefs().then((p) => {
         setZoom(p.zoom);
+        setRefSide(p.refSide);
         prefsLoaded.current = true;
       }),
       "表示設定の読込",
     );
-  }, [setZoom]);
+  }, [setZoom, setRefSide]);
 
   // ズーム変更をデバウンス保存（prefs.json のみ。プロジェクトフォルダには書かない）
   useEffect(() => {
     if (!prefsLoaded.current) return;
     const t = setTimeout(() => {
-      fireAndReport(savePrefs({ zoom }), "表示設定の保存");
+      fireAndReport(savePrefs({ zoom, refSide }), "表示設定の保存");
     }, 400);
     return () => clearTimeout(t);
-  }, [zoom]);
+  }, [zoom, refSide]);
 
   // §5.8-1: 起動時に一度だけ、まず実行シェルを探索（/bin/bash→/bin/zsh）してから
   // それを使って外部バイナリのフルパスを解決する。シェルが無ければ探索は失敗するが、
@@ -390,7 +393,7 @@ export default function App() {
       ) : (
         <div className={styles.workspace}>
           <LeftRail />
-          <div className={styles.center}>
+          <div className={styles.center} data-ref-side={splitView ? refSide : undefined}>
             <div className={styles.mainPane}>
               <div className={styles.page}>
                 <Editor />

@@ -36,8 +36,20 @@
   cursor: pointer;
 }
 
-.close {
+.swap {
   margin-left: auto;
+  font-size: 11.5px;
+  font-family: var(--font-ui);
+  padding: 4px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--c-lineStrong);
+  background: var(--c-page);
+  color: var(--c-sub);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.close {
   font-size: 11.5px;
   font-family: var(--font-ui);
   padding: 4px 10px;

@@ -11,6 +11,9 @@ import type { RecentProject } from "./recentProjects";
 
 export type SaveStatus = "clean" | "dirty" | "saving";
 export type RightTab = "notes" | "refs" | "fn";
+export type RefSide = "left" | "right"; // FR25: 参照ペインの配置（既定は左）
+
+export const REF_SIDE_DEFAULT: RefSide = "left";
 
 // レンダー・整合チェックの結果表示（パネル内。ファイルには書かない）
 export interface RenderState {
@@ -80,6 +83,7 @@ interface AppState {
   // FR25: 2窓モード（読み取り専用の参照ペイン）。保存・dirty・監視には非関与。
   splitView: boolean; // 参照ペインの表示（プロジェクトを跨いで保持）
   mirrorText: string; // 参照ペインへ渡す本文の写し
+  refSide: RefSide; // 参照ペインを左右どちらに置くか（prefs.json に永続化）
 
   // 右パネル資源（FR11/12）
   notes: ParsedNoteFile[];
@@ -116,6 +120,8 @@ interface AppState {
   setSplitView: (on: boolean) => void;
   toggleSplitView: () => void;
   setMirrorText: (t: string) => void;
+  setRefSide: (s: RefSide) => void;
+  toggleRefSide: () => void;
   setNotesData: (
     notes: ParsedNoteFile[],
     refs: BibEntry[],
@@ -151,6 +157,7 @@ export const useAppStore = create<AppState>((set) => ({
 
   splitView: false,
   mirrorText: "",
+  refSide: REF_SIDE_DEFAULT,
 
   notes: [],
   refs: [],
@@ -202,6 +209,9 @@ export const useAppStore = create<AppState>((set) => ({
   setSplitView: (splitView) => set({ splitView }),
   toggleSplitView: () => set((s) => ({ splitView: !s.splitView })),
   setMirrorText: (mirrorText) => set({ mirrorText }),
+  setRefSide: (refSide) => set({ refSide }),
+  toggleRefSide: () =>
+    set((s) => ({ refSide: s.refSide === "left" ? "right" : "left" })),
   setNotesData: (notes, refs, bibErrors, orphanKeys) =>
     set({ notes, refs, bibErrors, orphanKeys }),
   setRightTab: (t) => set({ rightTab: t }),

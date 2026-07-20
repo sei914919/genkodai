@@ -5,10 +5,11 @@
 // 互いを上書きしないようにする（recentProjects.ts と同じ方針）。
 import { appConfigDir } from "@tauri-apps/api/path";
 import { exists, mkdir, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
-import { clampZoom, ZOOM_DEFAULT } from "./store";
+import { clampZoom, REF_SIDE_DEFAULT, ZOOM_DEFAULT, type RefSide } from "./store";
 
 export interface Prefs {
   zoom: number; // 原稿テキストのズーム倍率
+  refSide: RefSide; // FR25: 参照ペインの配置（左/右）
 }
 
 const PREFS_FILE = "prefs.json";
@@ -22,12 +23,15 @@ async function prefsPath(): Promise<string> {
 export async function loadPrefs(): Promise<Prefs> {
   try {
     const p = await prefsPath();
-    if (!(await exists(p))) return { zoom: ZOOM_DEFAULT };
+    if (!(await exists(p))) return { zoom: ZOOM_DEFAULT, refSide: REF_SIDE_DEFAULT };
     const parsed = JSON.parse(await readTextFile(p)) as Partial<Prefs>;
-    return { zoom: clampZoom(parsed.zoom ?? ZOOM_DEFAULT) };
+    return {
+      zoom: clampZoom(parsed.zoom ?? ZOOM_DEFAULT),
+      refSide: parsed.refSide === "right" ? "right" : REF_SIDE_DEFAULT,
+    };
   } catch {
     // 壊れた設定ファイルで起動を妨げない。既定として扱う。
-    return { zoom: ZOOM_DEFAULT };
+    return { zoom: ZOOM_DEFAULT, refSide: REF_SIDE_DEFAULT };
   }
 }
 

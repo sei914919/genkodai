@@ -17,6 +17,8 @@ export function ReferencePane() {
   const zoom = useAppStore((s) => s.zoom);
   const headings = useAppStore((s) => s.derived.headings);
   const setSplitView = useAppStore((s) => s.setSplitView);
+  const refSide = useAppStore((s) => s.refSide);
+  const toggleRefSide = useAppStore((s) => s.toggleRefSide);
 
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -109,6 +111,13 @@ export function ReferencePane() {
             </option>
           ))}
         </select>
+        <button
+          className={styles.swap}
+          onClick={toggleRefSide}
+          title={refSide === "left" ? "参照ペインを右へ移す" : "参照ペインを左へ移す"}
+        >
+          {refSide === "left" ? "⇄ 右へ" : "⇄ 左へ"}
+        </button>
         <button
           className={styles.close}
           onClick={() => setSplitView(false)}

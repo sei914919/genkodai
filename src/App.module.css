@@ -177,12 +177,20 @@
   min-width: 0;
 }
 
-/* 読み取り専用の参照ペイン（split ON 時のみ描画） */
+/* 読み取り専用の参照ペイン（split ON 時のみ描画）。既定は右、仕切り線は左。 */
 .refPane {
   flex: 1;
   overflow-y: auto;
   min-width: 0;
   border-left: 1px solid var(--c-lineStrong);
+}
+
+/* 参照ペインを左に置く（FR25・prefs 永続）。order で視覚的に入れ替え、
+   仕切り線を右側へ移す（本エディタとの境界を1本に保つ）。 */
+.center[data-ref-side="left"] .refPane {
+  order: -1;
+  border-left: none;
+  border-right: 1px solid var(--c-lineStrong);
 }
 
 .page {
