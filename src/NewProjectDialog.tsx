@@ -5,6 +5,7 @@ import { createProject, ensureTemplate, readTemplate, validateProjectName } from
 import { gitInitAndCommit } from "./git";
 import { listQmdFiles } from "./fileio";
 import { loadResources } from "./loadProject";
+import { rememberProject } from "./recentProjects";
 import { snapshotProject } from "./snapshot";
 import { fireAndReport } from "./async";
 import { useAppStore } from "./store";
@@ -14,6 +15,7 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
   const bins = useAppStore((s) => s.bins);
   const openProject = useAppStore((s) => s.openProject);
   const setNotesData = useAppStore((s) => s.setNotesData);
+  const setRecent = useAppStore((s) => s.setRecent);
   const setNotice = useAppStore((s) => s.setNotice);
 
   const [parentDir, setParentDir] = useState<string | null>(null);
@@ -50,6 +52,8 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
       const res = await loadResources(projectDir);
       setNotesData(res.notes, res.refs, res.bibErrors, res.orphanKeys);
       fireAndReport(snapshotProject(projectDir, files), "リカバリスナップショット");
+      // FR2: 作成したてのプロジェクトも履歴へ記録する
+      setRecent(await rememberProject(projectDir));
 
       setNotice(`「${name.trim()}」を作成して開きました。${gitNote}`);
       onClose();

@@ -8,6 +8,7 @@ import { SettingsDialog } from "./SettingsDialog";
 import { NewProjectDialog } from "./NewProjectDialog";
 import { baseName, listQmdFiles } from "./fileio";
 import { loadResources } from "./loadProject";
+import { forgetProject, loadRecent, rememberProject } from "./recentProjects";
 import { insertRequireCitation } from "./editorActions";
 import { fireAndReport } from "./async";
 import { loadSettings, missingHint, resolveBins } from "./binPaths";
@@ -31,6 +32,7 @@ export default function App() {
   const currentPath = useAppStore((s) => s.currentPath);
   const saveStatus = useAppStore((s) => s.saveStatus);
   const notice = useAppStore((s) => s.notice);
+  const recent = useAppStore((s) => s.recent);
   const charCount = useAppStore((s) => s.derived.charCount);
   const markerCount = useAppStore((s) => s.derived.markers.length);
   const view = useAppStore((s) => s.view);
@@ -38,6 +40,7 @@ export default function App() {
   const git = useAppStore((s) => s.git);
   const render = useAppStore((s) => s.render);
   const openProject = useAppStore((s) => s.openProject);
+  const setRecent = useAppStore((s) => s.setRecent);
   const setCurrentPath = useAppStore((s) => s.setCurrentPath);
   const setNotice = useAppStore((s) => s.setNotice);
   const setNotesData = useAppStore((s) => s.setNotesData);
@@ -57,6 +60,11 @@ export default function App() {
     const t = setTimeout(() => setNotice(null), 5200);
     return () => clearTimeout(t);
   }, [notice, setNotice]);
+
+  // FR2: 起動時に最近開いたプロジェクトを app config 領域から読み込む
+  useEffect(() => {
+    fireAndReport(loadRecent().then(setRecent), "最近のプロジェクト読込");
+  }, [setRecent]);
 
   // §5.8-1: 起動時に一度だけ、まず実行シェルを探索（/bin/bash→/bin/zsh）してから
   // それを使って外部バイナリのフルパスを解決する。シェルが無ければ探索は失敗するが、
@@ -97,18 +105,39 @@ export default function App() {
     fireAndReport(refreshGit(), "git状態の取得");
   }, [refreshGit, saveStatus]);
 
-  const chooseFolder = async () => {
-    const dir = await open({ directory: true, title: "プロジェクトフォルダを開く" });
-    if (typeof dir !== "string") return;
-    try {
+  // フォルダを実際に読み込む共通処理（「フォルダを開く」と最近のプロジェクトから共用）。
+  // 成功時に FR2 の履歴へ記録する。失敗は呼び出し側で扱う（履歴クリック時は掃除する）。
+  const openFolder = useCallback(
+    async (dir: string) => {
       const files = await listQmdFiles(dir);
       openProject(dir, files);
       const res = await loadResources(dir);
       setNotesData(res.notes, res.refs, res.bibErrors, res.orphanKeys);
       // NFR3: 開いた時点の原稿を app config 領域へスナップショット（直近5世代）
       fireAndReport(snapshotProject(dir, files), "リカバリスナップショット");
+      // FR2: 履歴の先頭へ昇格
+      setRecent(await rememberProject(dir));
+    },
+    [openProject, setNotesData, setRecent],
+  );
+
+  const chooseFolder = async () => {
+    const dir = await open({ directory: true, title: "プロジェクトフォルダを開く" });
+    if (typeof dir !== "string") return;
+    try {
+      await openFolder(dir);
     } catch (e) {
       setNotice(`フォルダを開けませんでした: ${e}`);
+    }
+  };
+
+  // FR2: 履歴から開く。開けなければ（フォルダ移動・削除など）履歴から掃除する。
+  const openRecent = async (dir: string) => {
+    try {
+      await openFolder(dir);
+    } catch (e) {
+      setRecent(await forgetProject(dir));
+      setNotice(`開けませんでした（履歴から削除しました）: ${e}`);
     }
   };
 
@@ -301,6 +330,22 @@ export default function App() {
                     新規プロジェクト
                   </button>
                 </div>
+                {recent.length > 0 && (
+                  <div className={styles.recent}>
+                    <div className={styles.recentLabel}>最近開いたプロジェクト</div>
+                    {recent.map((r) => (
+                      <button
+                        key={r.dir}
+                        className={styles.recentItem}
+                        onClick={() => fireAndReport(openRecent(r.dir), "プロジェクトを開く")}
+                        title={r.dir}
+                      >
+                        <span className={styles.recentName}>{r.name}</span>
+                        <span className={styles.recentPath}>{r.dir}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </>
             ) : (
               <p className={styles.welcomeText}>

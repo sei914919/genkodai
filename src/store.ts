@@ -7,6 +7,7 @@ import type { BinPaths, Settings } from "./binPaths";
 import type { ShellInfo } from "./shell";
 import type { FillProposal } from "./proposalValidate";
 import { NOT_A_REPO, type GitState } from "./git";
+import type { RecentProject } from "./recentProjects";
 
 export type SaveStatus = "clean" | "dirty" | "saving";
 export type RightTab = "notes" | "refs" | "fn";
@@ -54,6 +55,9 @@ interface AppState {
   saveStatus: SaveStatus;
   notice: string | null;
 
+  // FR2: 最近開いたプロジェクト（app config 領域の recent.json が真実。これはその写し）
+  recent: RecentProject[];
+
   // エディタ由来の派生情報（FR7/9/10/13）
   view: EditorView | null;
   derived: Derived;
@@ -82,6 +86,7 @@ interface AppState {
   fill: FillState;
 
   openProject: (dir: string, files: string[]) => void;
+  setRecent: (r: RecentProject[]) => void;
   setCurrentPath: (path: string | null) => void;
   setSaveStatus: (s: SaveStatus) => void;
   setNotice: (msg: string | null) => void;
@@ -112,6 +117,8 @@ export const useAppStore = create<AppState>((set) => ({
   currentPath: null,
   saveStatus: "clean",
   notice: null,
+
+  recent: [],
 
   view: null,
   derived: EMPTY_DERIVED,
@@ -153,6 +160,7 @@ export const useAppStore = create<AppState>((set) => ({
       integrityReport: null,
       fill: FILL_IDLE,
     }),
+  setRecent: (recent) => set({ recent }),
   setCurrentPath: (path) => set({ currentPath: path, selectedMarkerIdx: null }),
   setSaveStatus: (s) => set({ saveStatus: s }),
   setNotice: (msg) => set({ notice: msg }),
