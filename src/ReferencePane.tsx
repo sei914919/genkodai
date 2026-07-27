@@ -24,18 +24,14 @@ export function ReferencePane() {
   const viewRef = useRef<EditorView | null>(null);
   const zoomCompartment = useRef(new Compartment());
   const zoomRef = useRef(zoom);
-  // 初回の mirrorText 適用はスキップする（マウント時の seed が最新で、
-  // 直前に splitView OFF だった間 mirrorText が古いままの可能性があるため上書きを防ぐ）
-  const seededRef = useRef(false);
 
-  // 読み取り専用ビューを一度だけ生成し、本エディタの現在バッファで seed する。
+  // 読み取り専用ビューを空で一度だけ生成する（本文は下の同期 effect が dispatch で流し込む）。
   // history / 保存keymap / autosave / watch / dirty用の updateListener は一切付けない。
   useEffect(() => {
     if (!hostRef.current) return;
-    const seed = useAppStore.getState().view?.state.doc.toString() ?? "";
     const view = new EditorView({
       state: EditorState.create({
-        doc: seed,
+        doc: "",
         extensions: [
           EditorState.readOnly.of(true),
           EditorView.editable.of(false),
@@ -55,20 +51,21 @@ export function ReferencePane() {
     };
   }, []);
 
-  // 本エディタから流れてくる本文の写しでバッファ全体を差し替える。
-  // 参照側の独立スクロール位置を保つため、差し替え前後で scrollTop を退避・復元する
+  // 参照ペインの本文を本エディタと同期する。
+  // 内容は mirrorText（debounce済みの写し）ではなく「生きている本エディタ view」から
+  // 直接読む。これによりマウント直後（mirrorText が空/古い瞬間）でも正しい本文が入り、
+  // 空文字での誤消去が起きない（StrictMode の二重実行に対しても冪等）。
+  // mirrorText は「本文が変わった」というトリガーとしてのみ使う（依存配列）。
+  // 差し替え前後で scrollTop を退避・復元し、参照側の独立スクロール位置を保つ
   // （1章を見ている間に5章＝下方を編集しても参照位置が飛ばない）。
   useEffect(() => {
-    if (!seededRef.current) {
-      seededRef.current = true;
-      return; // 初回は seed 済み。古い mirrorText で上書きしない
-    }
     const view = viewRef.current;
     if (!view) return;
-    if (mirrorText === view.state.doc.toString()) return;
+    const text = useAppStore.getState().view?.state.doc.toString() ?? mirrorText;
+    if (text === view.state.doc.toString()) return;
     const top = view.scrollDOM.scrollTop;
     view.dispatch({
-      changes: { from: 0, to: view.state.doc.length, insert: mirrorText },
+      changes: { from: 0, to: view.state.doc.length, insert: text },
     });
     view.scrollDOM.scrollTop = top;
   }, [mirrorText]);
