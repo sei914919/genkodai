@@ -20,7 +20,11 @@ export const paperTheme = EditorView.theme({
     lineHeight: "2.05",
     overflow: "visible",
   },
-  ".cm-content": { padding: "0", caretColor: C.ink },
+  // minWidth:0 — .cm-content は .cm-scroller（display:flex）の flex アイテムで、
+  // 既定の min-width:auto だと中身の min-content 幅より下に縮まない。折り返せない
+  // 要素が1つでもあると紙面カード幅を超えて広がり、本文全体がカード外へはみ出す。
+  // 0 にしておけば、何が入っても幅は必ずカード内に収まる（縦は従来どおり伸びる）。
+  ".cm-content": { padding: "0", caretColor: C.ink, minWidth: "0" },
   ".cm-line": { padding: "0" },
   "&.cm-focused": { outline: "none" },
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: C.ink },

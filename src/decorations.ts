@@ -220,7 +220,15 @@ const decoTheme = EditorView.baseTheme({
     padding: "1px 7px",
     margin: "0 2px",
     cursor: "pointer",
-    whiteSpace: "nowrap",
+    // ピルの中身は必ず折り返せるようにする。nowrap にすると長いトピックのピルが
+    // .cm-content の min-content 幅を押し上げ、.cm-content は flex アイテム
+    // （min-width:auto）なので紙面カード幅まで縮めなくなり、ピルだけでなく本文全行が
+    // カード外へずれて描画される。max-width の % 指定では防げない（パーセントは
+    // intrinsic サイズ計算で無視されるため）。短いトピックは従来どおり1行ピル。
+    display: "inline-block",
+    maxWidth: "100%",
+    whiteSpace: "normal",
+    overflowWrap: "anywhere",
     verticalAlign: "0.15em",
   },
   ".cm-gk-fn": {
