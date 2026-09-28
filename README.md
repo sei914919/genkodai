@@ -1,7 +1,98 @@
-# Tauri + React + Typescript
+# 原稿台（Genkōdai）
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+学術論文を Quarto（`.qmd`）で書くための、脚注の出典照合に特化したデスクトップエディタ。
 
-## Recommended IDE Setup
+A desktop editor for writing academic papers in Quarto, built around verifiable footnote sourcing.
+Japanese UI. Personal research tool, published as a reference implementation.
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+## これは何か
+
+法学論文の執筆で一番手間がかかるのは、本文の主張に対応する出典を探して脚注に正確に書き込む作業です。
+原稿台は、この作業を**AIに「書かせない」まま**速くするための道具です。
+
+- 本文を書きながら、出典が必要な箇所に `^[要出典: トピック名]` とマーカーを置いておく
+- 読んだ文献の抜き書きは、トピック単位のメモ（`notes/`）に「出典／引用（原文）／メモ」の形で溜めておく
+- マーカーをクリックすると、該当トピックのメモが**出典と引用原文のセット**で並び、ボタン一つで脚注に置き換わる
+
+脚注に入る出典は、必ず自分が読んで抜き書きしたメモのどれかです。該当するメモが無ければ「該当なし」と表示され、候補を推測で補うことはしません。
+
+## AIに書かせないための設計
+
+Claude Code（CLI）に脚注の候補探しを一括で任せる機能もありますが、捏造を構造的に防ぐため、次の制約を掛けています。
+
+1. **情報源は `notes/` のみ。** Claude には読み取り系のツール（Read / Grep / Glob）しか与えず、ファイルを書き換える権限を持たせません。
+2. **引用は逐語転記に限る。** 候補には必ず、`notes/` 内の原文をそのまま写した引用文を付けさせます。省略・要約・中略記号は禁止です。
+3. **アプリ側で機械的に照合する。** 返ってきた引用文が、指定されたメモファイル内に（空白の揺れを除いて）文字どおり実在するかを検証し、一致しない候補は破棄して警告します。
+4. **「該当なし」は正常な結果。** 探しても無かったことは、メモがまだ足りないという進捗として扱います。
+5. **採否は人間が決める。** 候補は一件ずつ承認・却下し、承認した分だけがアプリによって原稿に書き込まれます。実行の前後には自動で git commit し、何が変わったかを後から追えるようにしています。
+
+Claude CLI が無くても、手動照合だけで執筆は完結します。
+
+## 主な機能
+
+- CodeMirror 6 によるセミWYSIWYG編集（見出しの明朝表示、要出典マーカーのタグ表示、脚注の番号畳み込み）
+- 左レール：目次・要出典リスト
+- 右パネル：資料（`notes/`）・文献（`refs.bib`）・脚注の一覧
+- 自動保存（アトミック書き込み）と、VSCode など外部エディタでの同時編集の検知
+- `quarto render` の実行、notes/ と refs.bib の整合チェック、git の状態表示とコミット
+- 新規プロジェクトの作成（テンプレート複製＋ `git init`）、読み取り専用の参照ペイン（2窓）
+
+## 前提とするプロジェクト構成
+
+原稿台は独自のファイル形式を持たず、次のようなプレーンテキストのフォルダをそのまま開きます。
+
+```
+my-paper/
+├── paper.qmd      # 本文
+├── notes/         # トピック単位の抜き書き（1トピック1ファイル）
+│   └── 市場画定.md
+├── refs.bib       # 欧米文献の BibTeX
+└── CLAUDE.md      # Claude Code 向けの作業規則
+```
+
+`notes/` の1エントリは次の形です。
+
+```markdown
+## 市場画定
+
+- 出典: 著者『書名』（出版社、2020年）12頁 [key: @author2020]
+  引用: ここに原文をそのまま写す。
+  メモ: 自分の所感。
+```
+
+アプリの設定やスナップショットは OS のアプリ用領域に保存し、プロジェクトフォルダには何も作りません。
+構成と運用ルールの詳細は [`docs/writing-env-v2.md`](docs/writing-env-v2.md)、アプリの仕様は [`SPEC.md`](SPEC.md) にあります。
+
+## ビルド
+
+配布用のバイナリは用意していません。ソースからビルドしてください。
+
+必要なもの：
+
+- [Tauri 2 の前提環境](https://v2.tauri.app/start/prerequisites/)（Rust、Node.js、Linux では WebKitGTK など）
+- 実行時に使う外部コマンド：[Quarto](https://quarto.org/)（レンダー）、git、[Claude Code](https://docs.claude.com/en/docs/claude-code)（任意・一括穴埋め）
+
+```sh
+npm install
+npm run tauri dev     # 開発起動
+npm run tauri build   # ビルド
+npm test              # ユニットテスト（Vitest）
+```
+
+外部コマンドは起動時にログインシェル経由でフルパスを解決します。見つからない場合は設定画面から絶対パスを指定できます。
+
+## 動作環境と既知の制限
+
+- **macOS（Apple Silicon）** が主な動作環境です。**Ubuntu** でも動作を確認しています。
+- **Windows には対応していません。**
+- **Linux（WebKitGTK）での日本語入力：** 入力はできますが、変換中の文字列がエディタ内ではなく IME の変換ウィンドウに表示されます。確定後は正しく反映されます。Tauri / WebKitGTK 側の問題（[tauri-apps/tauri#11412](https://github.com/tauri-apps/tauri/issues/11412)）のため、エディタ側では対処していません。
+- 作者ひとりの執筆に合わせて作った道具です。上記のプロジェクト構成を前提としており、汎用のエディタではありません。
+
+## ライセンス
+
+[PolyForm Noncommercial License 1.0.0](LICENSE)
+
+非商用の目的（個人の研究・学習、大学や公的研究機関での利用など）であれば、自由に使用・改変・再配布できます。
+商用での利用を希望する場合は、作者に連絡してください。
+
+Copyright 2026 Sei Shishido

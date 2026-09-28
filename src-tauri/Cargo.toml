@@ -1,8 +1,9 @@
 [package]
 name = "genkodai"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "Desktop editor for writing academic papers in Quarto"
+authors = ["Sei Shishido"]
+license = "PolyForm-Noncommercial-1.0.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
