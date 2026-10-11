@@ -21,6 +21,7 @@ import { gitCommitAll, gitState } from "./git";
 import { integrityReport, renderQuarto } from "./workflow";
 import { snapshotProject } from "./snapshot";
 import { useAppStore } from "./store";
+import { modKey } from "./platform";
 import styles from "./App.module.css";
 
 const STATUS_LABEL = {
@@ -58,6 +59,8 @@ export default function App() {
   const toggleSplitView = useAppStore((s) => s.toggleSplitView);
   const refSide = useAppStore((s) => s.refSide);
   const setRefSide = useAppStore((s) => s.setRefSide);
+  const focusMode = useAppStore((s) => s.focusMode);
+  const toggleFocusMode = useAppStore((s) => s.toggleFocusMode);
 
   const [committing, setCommitting] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
@@ -115,11 +118,15 @@ export default function App() {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.code === "KeyF") {
         e.preventDefault();
         insertRequireCitation(view);
+      } else if ((e.metaKey || e.ctrlKey) && e.code === "Backslash") {
+        // 集中：Cmd/Ctrl+\ で左右ペインの表示を切替
+        e.preventDefault();
+        toggleFocusMode();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [view]);
+  }, [view, toggleFocusMode]);
 
   // FR20: git 状態の更新（保存状態が変わるたびに取り直す）
   const refreshGit = useCallback(async () => {
@@ -310,6 +317,14 @@ export default function App() {
           <>
             <button
               className={styles.openBtn}
+              onClick={toggleFocusMode}
+              data-on={focusMode || undefined}
+              title={`左右のペインを隠して紙面だけにする（${modKey()}+\\）`}
+            >
+              集中
+            </button>
+            <button
+              className={styles.openBtn}
               onClick={toggleSplitView}
               data-on={splitView || undefined}
               title="読み取り専用の参照ペインを開く（FR25）"
@@ -392,7 +407,7 @@ export default function App() {
         </div>
       ) : (
         <div className={styles.workspace}>
-          <LeftRail />
+          {!focusMode && <LeftRail />}
           <div className={styles.center} data-ref-side={splitView ? refSide : undefined}>
             <div className={styles.mainPane}>
               <div className={styles.page}>
@@ -413,7 +428,7 @@ export default function App() {
               </div>
             )}
           </div>
-          <RightPanel />
+          {!focusMode && <RightPanel />}
         </div>
       )}
 

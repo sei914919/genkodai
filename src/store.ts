@@ -84,6 +84,7 @@ interface AppState {
   splitView: boolean; // 参照ペインの表示（プロジェクトを跨いで保持）
   mirrorText: string; // 参照ペインへ渡す本文の写し
   refSide: RefSide; // 参照ペインを左右どちらに置くか（prefs.json に永続化）
+  focusMode: boolean; // 執筆集中：左右ペインを隠し紙面だけにする（狭いウィンドウ向け）
 
   // 右パネル資源（FR11/12）
   notes: ParsedNoteFile[];
@@ -119,6 +120,7 @@ interface AppState {
   setZoom: (z: number) => void;
   setSplitView: (on: boolean) => void;
   toggleSplitView: () => void;
+  toggleFocusMode: () => void;
   setMirrorText: (t: string) => void;
   setRefSide: (s: RefSide) => void;
   toggleRefSide: () => void;
@@ -158,6 +160,7 @@ export const useAppStore = create<AppState>((set) => ({
   splitView: false,
   mirrorText: "",
   refSide: REF_SIDE_DEFAULT,
+  focusMode: false,
 
   notes: [],
   refs: [],
@@ -208,6 +211,7 @@ export const useAppStore = create<AppState>((set) => ({
   setZoom: (z) => set({ zoom: clampZoom(z) }),
   setSplitView: (splitView) => set({ splitView }),
   toggleSplitView: () => set((s) => ({ splitView: !s.splitView })),
+  toggleFocusMode: () => set((s) => ({ focusMode: !s.focusMode })),
   setMirrorText: (mirrorText) => set({ mirrorText }),
   setRefSide: (refSide) => set({ refSide }),
   toggleRefSide: () =>

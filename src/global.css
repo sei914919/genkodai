@@ -7,6 +7,9 @@ body,
 #root {
   height: 100%;
   margin: 0;
+  /* ルートは決してスクロールさせない。WebKitGTK はルートが横スクロールした状態で
+     クリック位置と描画位置がずれる（狭いタイル配置でボタンが押せなくなった原因）。 */
+  overflow: hidden;
 }
 
 body {
