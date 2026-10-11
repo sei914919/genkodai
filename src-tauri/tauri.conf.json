@@ -15,8 +15,8 @@
         "title": "原稿台 — GENKŌDAI",
         "width": 1280,
         "height": 860,
-        "minWidth": 960,
-        "minHeight": 600
+        "minWidth": 480,
+        "minHeight": 360
       }
     ],
     "security": {
